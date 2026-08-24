@@ -13,6 +13,8 @@ from cognitive_firewall.schemas import EvaluationRequest, EvaluationResponse
 from cognitive_firewall.storage.approvals import ApprovalStore
 from cognitive_firewall.storage.db import AuditRow, Database
 from cognitive_firewall.storage.policies import SqlPolicyStore
+from cognitive_firewall.storage.reports import ReportStore
+from cognitive_firewall.storage.audit import AuditEvent
 
 
 class BatchResponse(BaseModel):
@@ -25,6 +27,11 @@ class PolicyActivation(BaseModel):
 
 class ApprovalDecision(BaseModel):
     approve: bool
+
+
+class ReidentifyRequest(BaseModel):
+    case_id: str = Field(min_length=1)
+    token: str = Field(min_length=1)
 
 
 def install_routes(app: FastAPI, *, db: Database, evaluator: Evaluator,
@@ -103,3 +110,31 @@ def install_routes(app: FastAPI, *, db: Database, evaluator: Evaluator,
                            "reason_codes": row.reason_codes, "categories": row.categories,
                            "injection_score": row.injection_score, "privacy_score": row.privacy_score,
                            "policy_hash": row.policy_hash} for row in rows]}
+
+    @app.post("/v1/mappings/reidentify")
+    def reidentify(body: ReidentifyRequest, _: Annotated[Principal, Depends(operator)]) -> dict:
+        try:
+            value = evaluator.mapping_store.reidentify(body.case_id, body.token)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="mapping not found") from None
+        evaluator.audit_store.record(AuditEvent(agent_id="operator", case_id=body.case_id,
+                                                operation="reidentify", decision="allow",
+                                                reason_codes=["mapping_reidentified"],
+                                                injection_score=0, privacy_score=0,
+                                                policy_hash=evaluator.policy.policy_hash))
+        return {"value": value}
+
+    @app.get("/v1/reports/summary")
+    def report_summary(_: Annotated[Principal, Depends(operator)],
+                       agent_id: str | None = None, window: int = Query(default=86_400, ge=1, le=2_592_000)) -> dict:
+        reports = ReportStore(db)
+        if agent_id:
+            from dataclasses import asdict
+            return asdict(reports.agent_summary(agent_id, window))
+        return reports.summary(window)
+
+    @app.get("/v1/reports/export")
+    def export_report(_: Annotated[Principal, Depends(operator)],
+                      agent_id: str | None = None, window: int = Query(default=86_400, ge=1, le=2_592_000)) -> dict:
+        import json
+        return json.loads(ReportStore(db).export_redacted(agent_id=agent_id, window=window))

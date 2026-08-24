@@ -72,3 +72,16 @@ def test_bad_input_and_error_response_never_echo_raw_payload():
         response = app.post("/v1/evaluations", content="{bad alice@example.com", headers={**AGENT, "Content-Type": "application/json"})
         assert response.status_code == 422
         assert "alice@example.com" not in response.text
+
+
+def test_reidentification_requires_operator_and_is_audited():
+    with client() as app:
+        result = app.post("/v1/evaluations", json=payload(), headers=AGENT).json()
+        token = result["safe_payload"]
+        body = {"case_id": "case-1", "token": token}
+        assert app.post("/v1/mappings/reidentify", json=body, headers=AGENT).status_code == 403
+        resolved = app.post("/v1/mappings/reidentify", json=body, headers=OPERATOR)
+        assert resolved.status_code == 200 and resolved.json()["value"] == "alice@example.com"
+        audit = app.get("/v1/audit", headers=OPERATOR).json()
+        assert any("mapping_reidentified" in row["reason_codes"] for row in audit["items"])
+        assert "alice@example.com" not in str(audit)

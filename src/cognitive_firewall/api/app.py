@@ -45,6 +45,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     evaluator = Evaluator(policy, audit, SqlMappingStore(db, encryption_key=_key(settings.mapping_key),
                                                      hmac_key=_key(settings.hmac_key)),
                           SqlMemoryStore(db), approvals)
+    app.state.evaluator = evaluator
     install_routes(app, db=db, evaluator=evaluator, approvals=approvals,
                    policies=policies, auth=Authenticator(settings))
 

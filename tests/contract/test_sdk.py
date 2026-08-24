@@ -38,6 +38,11 @@ def test_blocked_or_unavailable_firewall_prevents_egress():
         guard.before_model(request())
 
 
+def test_client_refuses_remote_firewall_for_raw_content():
+    with pytest.raises(ValueError):
+        FirewallClient("https://remote.example", "token")
+
+
 def test_async_client_uses_same_contract():
     async def handler(req):
         return httpx.Response(200, json={"decision": "allow", "safe_payload": "safe",
