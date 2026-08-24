@@ -6,7 +6,7 @@ Single-tenant Windows host at `H:\CognitiveAIH`, Python 3.12 virtual environment
 
 ## Security regression results
 
-The 22-case labeled detector corpus includes nested JSON, free-text PII, benign content, direct and encoded instruction attacks, and a known multilingual attack. Metrics are case-level, with a positive injection prediction requiring severity at least 80. They measure these fixtures only.
+The labeled corpus has 22 cases covering nested JSON, free-text PII, benign content, direct and encoded instruction attacks, and a known multilingual attack. These case-level metrics apply only to those fixtures. An injection prediction counts as positive at severity 80 or above.
 
 | Detector | TP | FP | FN | TN | Precision | Recall |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -38,6 +38,6 @@ Focused regression tests cover: immutable approved JSON snapshots; provider capt
 
 ## Operational limits
 
-This is a single-host pilot. The local regex/heuristic detectors can miss unsupported PII patterns and novel attacks. The SDK is a guardrail for cooperative Python callers; hostile in-process code can bypass it. Operators should use the approval audit trail and review policy changes before activation. Mapping retention defaults to 24 hours; backup and key rotation procedures are in [operations.md](operations.md).
+This single-host pilot can miss unsupported PII patterns and novel attacks. Its SDK depends on cooperative Python callers, since hostile code in the same process can bypass it. Use the approval audit trail and review policy changes before activation. Mappings default to 24-hour retention; [operations.md](operations.md) covers backups and key rotation.
 
 Once Docker Desktop's Linux engine is healthy, run `docker compose up --build -d`, check `http://localhost:8000/ready`, and run `.\.venv\Scripts\python.exe scripts/check_dashboard.py` to close the final container gate. The latest Postgres migration also needs a fresh run in that environment; the corresponding SQLite migration and approval behavior passed automated tests.

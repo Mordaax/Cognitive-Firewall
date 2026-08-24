@@ -23,18 +23,20 @@ Example evaluation body:
 {"operation":"model_input","payload":"alice@example.com","source":"user","destination":"openai","case_id":"demo-1","agent_id":"demo-agent"}
 ```
 
-The response includes `decision`, `safe_payload`, `findings`, `reason_codes`, `injection_score`, `privacy_score`, `policy_hash`, and `audit_id`. `safe_payload` is `null` for blocks and pending approvals. `approval_id` is present on pending approvals; submit the same request plus this ID after operator approval. Request validation errors are generic and never echo the body. OpenAPI is available at `/openapi.json` and `/docs`.
+Each evaluation returns `decision`, `safe_payload`, `findings`, `reason_codes`, `injection_score`, `privacy_score`, `policy_hash`, and `audit_id`. A block or pending approval has `safe_payload` set to `null`. Pending requests also return `approval_id`; after operator approval, resubmit the same request with that ID. Validation errors are generic and never echo the body. Inspect the OpenAPI schema at `/openapi.json` or use `/docs` interactively.
 
-CLI commands: `scan`, `sanitize`, `policy validate`, `report export`, `approval decide`, `mapping request-reidentify`, and `mapping reidentify`. Credentials are read only from `FIREWALL_AGENT_TOKEN` or `FIREWALL_OPERATOR_TOKEN` in the environment; there is no `--token` argument. For re-identification, request an approval, decide it as operator, then supply the approval ID to `mapping reidentify`. `sanitize` writes to a separate output path and supports `--dry-run`. The MCP stdio server exposes `evaluate_content` and `sanitize_content` with the same request and response schemas.
+The CLI has `scan`, `sanitize`, `policy validate`, `report export`, `approval decide`, `mapping request-reidentify`, and `mapping reidentify`. It reads credentials from the environment using `FIREWALL_AGENT_TOKEN` or `FIREWALL_OPERATOR_TOKEN`, with no `--token` argument.
+
+To re-identify a mapping, request approval, decide it as operator, then pass the approval ID to `mapping reidentify`. For file sanitization, `sanitize` writes to a separate output path and accepts `--dry-run`. MCP exposes `evaluate_content` and `sanitize_content` over stdio using the same request and response schemas.
 
 For interactive schema inspection on a development machine, run `mcp dev scripts/mcp_inspector.py:server` after initializing `.env`. The normal stdio entry point remains `python -m cognitive_firewall.mcp.server`.
 # Agent identity, tools and provenance
 
-Evaluation requests must use the agent identity bound to their bearer token.
-`FIREWALL_AGENT_ID` defaults to `demo-agent`. Extra tokens are configured with
-`FIREWALL_AGENT_TOKENS`, a private JSON object of agent ID to distinct token. The
-operator token is accepted only for operator routes, not evaluations. A mixed-agent
-batch is rejected as a whole before any evaluation.
+Every evaluation must match the agent identity bound to its bearer token.
+`FIREWALL_AGENT_ID` defaults to `demo-agent`; add identities through
+`FIREWALL_AGENT_TOKENS`, a private JSON object mapping agent IDs to distinct tokens.
+The operator token works only on operator routes. If a batch mixes agent identities,
+the API rejects the whole batch before evaluating anything.
 
 Every `tool_request` requires a JSON object in `payload`, a registered
 `destination` in `policies/tools.yaml`, and an explicit grant for the bound agent.
@@ -42,11 +44,11 @@ Example: `{"service":"demo"}` for `privileged:restart`. This evaluates the propo
 action only; it never restarts anything. An executor must use `ToolBroker` or enforce
 equivalent exact-action checks before its own side effects.
 
-Admitted responses may include `provenance_id`. To reuse the exact content, supply
-it as request `provenance_id`; to evaluate derived content, supply parent references
-as `lineage_ids` (at most 32). The firewall blocks mismatched content, unknown handles, expired references and
-references from another agent or case. All references remain untrusted. Omitting them
-does not clear the agent's persisted exposure state.
+An admitted response may include `provenance_id`. Supply it as request
+`provenance_id` when reusing that exact content. For derived content, pass up to 32
+parent references as `lineage_ids`. Unknown or expired handles, content mismatches,
+and references belonging to another agent or case all block. References remain
+untrusted, and omitting them leaves the agent's persisted exposure state intact.
 
 `GET /v1/security/status` requires the operator credential and returns the
 tool-policy hash, provenance and semantic-screening states, threshold and mandatory

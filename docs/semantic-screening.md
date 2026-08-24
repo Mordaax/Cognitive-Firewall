@@ -6,12 +6,12 @@ text or a JSON object and returns a float probability in [0, 1]. The trusted eng
 owns the blocking threshold and must block on `SemanticScreeningError` whenever
 screening is enabled. A low score cannot grant a capability or erase provenance.
 
-Provision the optional Transformers/PyTorch runtime and an independently reviewed,
-pinned model snapshot before enabling this layer. Configure an absolute existing
-local directory; repository IDs and relative paths are rejected. The adapter loads
-only local tokenizer/model files, disables remote code, and requires safetensors
-weights. It never downloads a model. Restrict filesystem modification of this
-trusted directory. Record the upstream revision and file hashes when provisioning.
+Before enabling screening, install the optional Transformers/PyTorch runtime and
+provision an independently reviewed, pinned model snapshot. Use an existing
+absolute local directory; repository IDs and relative paths are rejected.
+The adapter requires safetensors weights, loads only local tokenizer/model files,
+and disables remote code. It never downloads models. Restrict writes to this
+trusted directory and record the upstream revision and file hashes when provisioning.
 
 One compatible purpose-trained model is
 [ProtectAI/deberta-v3-base-prompt-injection-v2](https://huggingface.co/protectai/deberta-v3-base-prompt-injection-v2).
@@ -31,12 +31,11 @@ missing context limits, inference failures, unrecognized/duplicate/missing label
 and malformed or non-normalized probabilities raise `SemanticScreeningError`.
 This implementation expects mutually exclusive classification probabilities.
 
-The optional `pipeline` constructor argument is an external inference boundary for
-unit tests only. Tests supply fixed classifier-output fixtures and exercise label
-mapping, validation, context rejection and error behavior; they do not establish
-real semantic model accuracy. Real-model evaluation requires separately provisioned
-weights and representative held-back hostile and benign corpora. Never accept a
-pipeline object or label mapping from an untrusted request.
+The optional `pipeline` constructor argument supplies an external inference
+boundary for unit tests only. Fixed output fixtures exercise label mapping,
+validation, context rejection, and error behavior without measuring model accuracy.
+For that, provision weights separately and evaluate representative held-back hostile
+and benign corpora. Untrusted requests must never supply pipeline objects or label mappings.
 
 Deterministic screening also inspects at most three text copies: original
 and up to two bounded normalization passes using NFKC, format-character removal,
@@ -96,10 +95,10 @@ then scored these synthetic fixtures on CPU:
 | Explicit override with secret disclosure and exfiltration | 0.9999997616 | 0.094 |
 | Paraphrased administrator policy change asking for confidential context | 0.9999997616 | 0.187 |
 
-These three cases establish that the installed real model runs through the adapter;
-they do not establish broad accuracy. The earlier fixture-based adapter tests remain
-unit tests. A torch deprecation warning was emitted during loading; inference
-completed successfully. Provisioning alone does not enable screening in a running
-service; service configuration and restart are separate operator actions.
+These three cases confirm that the installed model runs through the adapter.
+They cannot establish broad accuracy, and the earlier fixture-based checks remain
+unit tests. Loading emitted a torch deprecation warning, but inference succeeded.
+After provisioning, an operator still needs to configure and restart the service
+to enable screening.
 
 

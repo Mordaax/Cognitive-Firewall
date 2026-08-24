@@ -1,15 +1,14 @@
 # 50 evaluation requests (curl)
 
-All content is synthetic. These requests evaluate content locally; they do not call a
-model provider, fetch the URLs inside payloads, or execute the described tools.
-Running all examples records audit events and creates pending approvals for tools,
-exports and memory. It does not approve them or execute actions.
-Expected decisions below were measured in order with the bundled policies and
-semantic screening disabled. Agent taint persists across cases. Changing
-the active policy can change results. Pseudonym values and IDs vary between runs.
-Some username/account-field examples return `block` (or await approval first):
-the current verification pass still detects those fields after transformation and fails closed rather than
-returning the transformed content.
+All requests use synthetic content and run locally, without provider calls, URL
+fetches, or tool execution. Running them records audit events and queues tool,
+export, and memory approvals; it approves nothing.
+
+Expected decisions were measured in order with bundled policies and semantic
+screening disabled. Taint persists across cases, active-policy changes can alter
+results, and pseudonyms and IDs vary between runs. Some username/account-field
+examples return `block` (or await approval first) because verification still detects
+those fields after transformation. The firewall fails closed without returning them.
 
 ## Bash / WSL / Git Bash setup
 
@@ -29,12 +28,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\examples\evaluation-reques
 The PowerShell script reads only `FIREWALL_AGENT_TOKEN` from `.env` (or uses an
 existing environment variable) and never prints it. Stop a run with Ctrl+C.
 
-`source` and `destination` describe the boundary being checked; they do not tell the
-evaluation API to retrieve content or forward it to that destination. `memory_read`
-checks memory content supplied in `payload`; it does not fetch a stored memory.
-A `memory_write` stores transformed content only after exact operator approval.
-All durable memory writes require review. Exports after untrusted input require
-review before redaction; a classifier may block additional cases when enabled.
+`source` and `destination` identify the boundary to check, without triggering
+retrieval or forwarding. For `memory_read`, supply the content in `payload`; the API
+does not fetch stored records. A `memory_write` persists transformed content only
+after exact operator approval, as every durable memory write requires review.
+Exports after untrusted input need review before redaction too. Enabling a
+classifier may block additional cases.
 
 ## 01. Summarize release notes
 

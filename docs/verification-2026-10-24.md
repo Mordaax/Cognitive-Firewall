@@ -1,6 +1,6 @@
 # Defense-in-depth verification: 2026-10-24
 
-All work is local. No provider requests or paid model calls were made.
+Verification ran locally without provider requests or paid model calls.
 
 ## Automated verification
 
@@ -24,10 +24,10 @@ content and identity binding, expiry, bounded ancestry, omission and case switch
 memory failure before side effects; semantic errors and context overflow; reader
 credentials, Unicode roundtrips, malformed output, output limits and timeout cleanup.
 
-Independent security review identified relative-path ambiguity across evaluator and
-executor working directories and Windows locale-encoded reader output. Both were
-reproduced with failing regressions and fixed. MCP identity and cross-case lineage
-issues identified during integration were also corrected.
+Security review found relative-path ambiguity between evaluator and executor
+working directories, along with Windows locale-encoded reader output. Failing
+regressions reproduced both issues before fixes. Integration also exposed MCP
+identity and cross-case lineage issues, which were corrected.
 
 ## Actual local classifier
 
@@ -35,7 +35,7 @@ ProtectAI DeBERTa prompt-injection v2 was provisioned from revision
 `90c9989b1a342275dd0d1a95aad283c04e075671`, safetensors only. Seven runtime files
 occupy about 714 MiB; local manifests contain hashes. Offline CPU smoke inference
 completed successfully; see [model details and measured scores](semantic-screening.md).
-These fixtures verify operation, not population-level accuracy.
+The fixtures confirm operation but cannot establish population-level accuracy.
 
 ## Running HTTP service
 

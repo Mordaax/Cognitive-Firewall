@@ -1,21 +1,21 @@
 # Cognitive Firewall
 
-Cognitive Firewall checks what an agent is about to read, write, store, or send to a language model provider. It runs locally, looking for supported personal data, secrets, and instructions buried in untrusted material before the application continues.
+Cognitive Firewall checks content locally before an agent reads, writes, stores, or sends it to a language model provider. It looks for supported personal data, secrets, and prompt injection, then returns a decision: allow, sanitize, block, or require operator approval.
 
-Web pages, search results, and tool output can contain instructions an agent was never meant to follow. Customer messages bring a different problem, since private details can slip into a provider request along with the task. At each boundary, the firewall evaluates the content and returns a decision: allow it, sanitize it, block it, or ask an operator to approve it.
+Retrieved pages and tool output can carry instructions the agent was never meant to follow. Private details in customer messages can also slip into provider requests. The firewall checks each boundary before the application continues.
 
 ## How it works
 
-1. Your application submits the content along with its source, destination, and operation, such as model input or a tool result.
-2. Local detectors check for supported personal data, secrets, and prompt injection, then the active policy determines what can continue.
-3. Admitted content may have personal details redacted or replaced with case-scoped pseudonyms, whose mappings stay encrypted locally. Tool requests also need a registered capability and structured arguments. Passing the content checks alone doesn't authorize an action, and the included OpenAI and Claude adapters accept only approved model input.
-4. The audit trail records the decision, scores, and policy version. It keeps no copy of the original content.
+1. Submit content with its source, destination, and operation, such as model input or a tool result.
+2. Local detectors screen it, and the active policy decides what can continue.
+3. Personal details may be redacted or replaced with case-scoped pseudonyms, whose mappings stay encrypted locally. Tool requests need registered capabilities and structured arguments as well. The OpenAI and Claude adapters accept only approved model input.
+4. The audit trail keeps decisions, scores, and policy versions without copying the content.
 
-You can use the same controls through the FastAPI service, Python SDK, MCP server, or command-line tool. The operator dashboard shows redacted activity and approval counts, while re-identifying a pseudonym requires a separate approval that expires and can be used only once.
+Use the FastAPI service, Python SDK, MCP server, or command-line tool. The dashboard shows redacted activity and approval counts. Re-identifying a pseudonym needs separate, expiring, single-use approval.
 
 ## Run locally
 
-You'll need Python 3.12. From the project directory, run:
+With Python 3.12 installed, run from the project directory:
 
 ```powershell
 python -m venv .venv
@@ -24,16 +24,16 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m uvicorn cognitive_firewall.api.app:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
-Leave the API running. In a second terminal, check that it is ready and try the mock agent, which needs no provider key:
+Leave the API running, then check readiness and try the mock agent in another terminal. No provider key is needed:
 
 ```powershell
 curl.exe http://127.0.0.1:8000/ready
 .\.venv\Scripts\python.exe examples\langgraph_agent.py --provider mock
 ```
 
-`scripts/init_secrets.py` adds any missing local credentials to `.env`. If you want to use a cloud model, set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in that file. Keep `.env` private. The firewall processes raw personal data locally, and the included adapters send only the content admitted for the selected provider.
+`scripts/init_secrets.py` adds missing credentials to `.env`. For cloud models, set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` there. Keep `.env` private. Raw personal data is processed locally, and the adapters send only content admitted for the selected provider.
 
-For a container setup, use `docker compose up --build -d`. You can reach the API at `127.0.0.1:8000` and the dashboard at `127.0.0.1:8501`.
+For containers, run `docker compose up --build -d`. The API listens at `127.0.0.1:8000` and the dashboard at `127.0.0.1:8501`.
 
 ## Try the demo
 
@@ -43,15 +43,15 @@ With the service running, send five synthetic examples:
 python scripts/demo_requests.py
 ```
 
-The demo lets ordinary text through and replaces an email with a pseudonym. It also blocks malicious retrieval, then holds an export and a privileged action for approval because the agent's exposure to retrieved content persists across requests. Later tool actions and exports need review too. Everything here runs locally without calling a model provider.
+The demo allows ordinary text, pseudonymizes an email, and blocks malicious retrieval. That exposure persists, so subsequent tools and exports need approval. The demo holds an export and a privileged action for review, all locally without provider calls.
 
 Open the [API docs](http://127.0.0.1:8000/docs) to inspect the schemas or try a request. For evaluations, use **Authorize** with `FIREWALL_AGENT_TOKEN` from your local `.env` and submit `agent_id: demo-agent` (or your configured `FIREWALL_AGENT_ID`). Each token is bound to an agent identity. Operator endpoints take the separate `FIREWALL_OPERATOR_TOKEN`, which cannot submit evaluations.
 
-Open the [dashboard](http://127.0.0.1:8501) and unlock it with `FIREWALL_OPERATOR_TOKEN` from `.env` to see decision counts and risk charts. Refresh the page after sending more examples.
+Unlock the [dashboard](http://127.0.0.1:8501) with `FIREWALL_OPERATOR_TOKEN` from `.env` for counts and risk charts. Refresh after sending requests.
 
 ## Send evaluation requests with curl
 
-Send content to `POST http://127.0.0.1:8000/v1/evaluations` with your agent bearer token. The API checks it locally and returns a decision, `safe_payload`, findings, risk scores, and an audit ID. It doesn't forward the request to a model provider, even when you set `destination` to `openai`.
+Send content to `POST http://127.0.0.1:8000/v1/evaluations` with your agent bearer token. It returns a decision, `safe_payload`, findings, scores, and an audit ID. Setting `destination` to `openai` selects the boundary to check. It makes no provider call.
 
 From the project root in PowerShell, read the agent token without printing it:
 
@@ -84,11 +84,11 @@ Block an instruction hidden in retrieved content:
 '@ | curl.exe --silent --show-error --fail-with-body http://127.0.0.1:8000/v1/evaluations -H "Authorization: Bearer $env:FIREWALL_AGENT_TOKEN" -H "Content-Type: application/json" --data-binary '@-'
 ```
 
-Under the bundled default policy, those requests return `allow`, `sanitize`, and `block`, respectively. The email becomes a case-scoped pseudonym, whereas a blocked request has no usable `safe_payload`. Your application still has to enforce the decision. The `source` and `destination` fields describe the boundary to check without causing the API to fetch data or execute an action.
+The default policy returns `allow`, `sanitize`, and `block`, respectively. The email becomes a case-scoped pseudonym. Blocks have no usable `safe_payload`, and your application must enforce the decision. Neither `source` nor `destination` causes fetching or execution.
 
 ## Exact injection and PII requests
 
-These synthetic requests were run against the local API using the default policies, with semantic screening enabled at threshold `0.8`. Use the PowerShell agent-token setup above to try them yourself. They make no model-provider calls.
+These synthetic requests used the default policies and semantic screening at threshold `0.8`, without provider calls. Reuse the PowerShell token setup above.
 
 The response excerpts show the decision, transformed content, and reason codes. Full responses also include findings, risk scores, policy hashes, and generated IDs. Treat the results as examples rather than an accuracy benchmark, since changing the model or configuration can change what gets through.
 
@@ -208,7 +208,7 @@ Measured response excerpt:
 }
 ```
 
-Only the semantic classifier caught this request. Disable semantic screening and the current text rules let it through, though capability restrictions still apply independently.
+Only the semantic classifier caught this. With screening disabled, text rules allow it, while capability restrictions still apply.
 
 ### 5. Injection split with invisible Unicode characters
 
@@ -237,7 +237,7 @@ Measured response excerpt:
 }
 ```
 
-When the API parses this JSON, the escapes become zero-width characters inside the instruction. Both normalization screening and the semantic classifier flagged it.
+The JSON escapes become zero-width characters. Normalization screening and the semantic classifier both flagged the instruction.
 
 ### 6. Observed false positive on nested PII
 
@@ -271,17 +271,14 @@ Measured response excerpt:
 }
 ```
 
-This is harmless synthetic contact data, but the installed classifier flagged its serialized JSON as an injection at threshold 0.8. With semantic screening disabled, the default privacy rules sanitize it. The block is a false positive.
+This block is a false positive: the classifier flagged harmless contact JSON at threshold 0.8. Without semantic screening, default privacy rules sanitize it.
 
 Required fields are `operation`, `payload` (text or a JSON object), `source`,
 `destination`, `case_id`, and `agent_id`. Use opaque IDs without personal data.
 Supported operations are `model_input`, `retrieval`, `tool_request`, `tool_result`,
 `memory_read`, `memory_write`, `model_output`, and `export`.
 
-See [50 curl evaluation examples](docs/evaluation-examples.md) for ordinary
-content, privacy transformations, exports, injection attacks, fabricated secrets,
-and privileged requests, with expected decisions for every example. The commands
-there use Bash / WSL / Git Bash syntax. On Windows, run the equivalent 50 requests:
+The [50 curl evaluation examples](docs/evaluation-examples.md) cover ordinary content, privacy, exports, attacks, fabricated secrets, and privileged requests with expected decisions. They use Bash / WSL / Git Bash. For Windows, run the equivalent 50 requests:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\examples\evaluation-requests.ps1
@@ -291,15 +288,15 @@ All 50 examples use synthetic data and run without a provider key. Running them 
 
 ## Protection beyond text matching
 
-Several controls apply independently of whether the detectors recognize an attack:
+Detection does not grant permission:
 
 - Each bearer token is bound to an agent ID, and MCP uses its configured identity.
-- Tool permissions come from [policies/tools.yaml](policies/tools.yaml), a separate registry that denies unregistered calls by default. JSON schemas validate arguments, while resource constraints can restrict file roots, recipients, and URL hosts. Tools with side effects need approval unless the trusted host explicitly declares them read-only.
+- [policies/tools.yaml](policies/tools.yaml) denies unregistered tools. JSON schemas validate arguments, with constraints for file roots, recipients, and URL hosts. Tools need approval unless the trusted host declares them read-only.
 - Before calling a host-registered handler, `ToolBroker` rechecks the action against its bound agent and case. Changed or sanitized arguments are rejected.
-- Server-issued references bind content to its lineage. Once an agent has been exposed to untrusted content, later tools and exports require review across cases for up to 24 hours. Changing a case ID won't clear that state.
+- Server-issued references retain lineage. Untrusted exposure makes later tools and exports require review across cases for up to 24 hours. Changing case IDs cannot clear it.
 - Every durable memory write needs a separate, single-use operator approval.
 - The bounded reader process receives no provider or firewall credentials. Its structured output remains untrusted, and the process is not an OS sandbox.
-- An optional local classifier screens meaning alongside the bounded Unicode and encoding checks. Neither a low classifier score nor those checks can grant permissions or override a block.
+- Optional local semantic screening complements bounded Unicode and encoding checks. Neither grants permissions or overrides blocks.
 
 Run the local reader/broker demonstration:
 
@@ -307,9 +304,9 @@ Run the local reader/broker demonstration:
 .\.venv\Scripts\python.exe examples\isolated_reader.py
 ```
 
-To enable semantic screening, install `.[semantic]` and provision a reviewed safetensors model locally, then put its absolute directory in `FIREWALL_SEMANTIC_MODEL_PATH`. Set `FIREWALL_SEMANTIC_LABELS` to the model's attack labels and restart the API. If enabled screening is missing or fails, the request is blocked. Inputs beyond the model context are rejected without truncation.
+For semantic screening, install `.[semantic]` and provision a reviewed local safetensors model. Set its absolute directory in `FIREWALL_SEMANTIC_MODEL_PATH`, configure attack labels in `FIREWALL_SEMANTIC_LABELS`, and restart. Enabled screening fails closed, and over-context inputs are rejected without truncation.
 
-Startup and inference never download a model. The tested local setup uses a pinned classifier, so a fresh clone still needs the separate provisioning step.
+Startup and inference never download weights. Fresh clones need separate provisioning of the pinned classifier used in testing.
 
 See [defense-in-depth design and integration](docs/defense-in-depth.md),
 [reader example and limits](docs/isolated-reader.md), and
@@ -318,7 +315,7 @@ Operator-authenticated `GET /v1/security/status` reports which layers are enable
 
 ## Scope
 
-This is a single-tenant pilot, and its pattern and heuristic detectors can miss unfamiliar personal data or new prompt-injection techniques. Applications need to use the guard or API at every boundary they want protected. A direct call to a provider bypasses those checks. The [security model](docs/security.md) describes the trust boundary and remaining limitations.
+This single-tenant pilot can miss unfamiliar personal data and new injection techniques. Protect each application boundary with the guard or API, since direct provider calls bypass it. See the [security model](docs/security.md) for limitations.
 
 ## Documentation
 

@@ -4,10 +4,10 @@ Approved scope: implement all phases requested in the conversation on 2026-10-24
 
 ## Trust model
 
-The trusted host owns agent credentials, tool registrations, resource permissions,
-the original task, and executor implementations. Retrieved text, model outputs,
-and reader outputs never grant permissions. Hostile Python running in the trusted
-broker's process is outside the boundary: use OS/container separation in deployment.
+Agent credentials, tool registrations, resource permissions, the original task,
+and executor implementations belong to the trusted host. Retrieved text and
+model/reader outputs cannot grant permissions. Deployment needs OS/container
+separation for hostile Python, which falls outside the trusted broker's process boundary.
 
 ## Deliverables
 
@@ -34,11 +34,11 @@ broker's process is outside the boundary: use OS/container separation in deploym
 
 ## Compatibility and limitations
 
-Tool calls now require structured arguments and registration. Migrate old curl
-fixtures and the mock example rather than silently falling back to permissive tool
-execution. Existing content-only evaluations remain supported. The old single
-agent token is bound to one configured agent ID; additional agent tokens are
-configured explicitly and must be distinct from operator credentials.
+Tool calls require registration and structured arguments. Migrate the old curl
+fixtures and mock example without introducing a permissive execution fallback.
+Content-only evaluations remain supported. Bind the existing single agent token
+to one configured agent ID, then configure any additional tokens explicitly,
+keeping them distinct from operator credentials.
 No text classifier guarantees injection detection or protects model weights,
 training data, arbitrary external tools, or direct vendor calls bypassing the broker.
 

@@ -12,7 +12,9 @@ To use Postgres, set `FIREWALL_POSTGRES_PASSWORD` to a strong secret and `FIREWA
 
 ## Policy and approvals
 
-Validate a file with `cognitive-firewall policy validate policies/default.yaml`. Activate YAML through the operator endpoint and save the previous policy file/hash. Roll back by submitting the previous YAML. Each decision response records the active hash; a policy change invalidates pending approvals because the binding includes that hash. Review pending requests through `GET /v1/approvals/pending` or `GET /v1/approvals/{id}` before deciding. Approvals expire after 15 minutes and cannot be replayed.
+Validate policy with `cognitive-firewall policy validate policies/default.yaml` before activating YAML through the operator endpoint. Keep the previous file and hash so you can roll back by submitting that YAML. Decisions record the active hash, and changing it invalidates pending approvals.
+
+Review requests through `GET /v1/approvals/pending` or `GET /v1/approvals/{id}` before deciding. Approval expires after 15 minutes and cannot be replayed.
 
 Re-identification requires two steps before the final lookup: submit the case and pseudonym to `/v1/mappings/reidentify/request`, then decide the returned approval ID via `/v1/approvals/{id}/decision`. Submit the same case and pseudonym with `approval_id` to `/v1/mappings/reidentify`. The approval is single-use; mappings expire after 24 hours by default. The CLI reads bearer tokens from environment variables, not command arguments.
 
@@ -25,13 +27,15 @@ Back up the SQLite/Postgres database and `.env` in separate access-controlled lo
 Run `.\.venv\Scripts\python.exe -m pytest -q`, Ruff, and the synthetic LangGraph example. The Docker smoke gate requires Docker Desktop's Linux engine running. Check that provider request capture contains only pseudonyms/redactions, and that audit/report/dashboard outputs contain no raw fixture PII. The verification report documents measured results and any unavailable gates.
 # Operating the stricter boundaries
 
-New installs need the core `jsonschema` dependency. Run `pip install -e ".[dev,full]"`
-after upgrading. Optional semantic inference also needs `.[semantic]` and
-a reviewed local model; see [provisioning](semantic-screening.md). Startup never
-downloads weights. Set `FIREWALL_SEMANTIC_MODEL_PATH` to an absolute model directory,
-`FIREWALL_SEMANTIC_LABELS=INJECTION` for the documented model, and a probability
-threshold such as `FIREWALL_SEMANTIC_THRESHOLD=0.8`. Its supported context is 512
-tokens; longer input fails closed. Fresh clones do not include the model assets.
+Install the core `jsonschema` dependency with `pip install -e ".[dev,full]"`
+after upgrading. Semantic inference also requires `.[semantic]` and a
+reviewed local model, described in [provisioning](semantic-screening.md). Startup
+never downloads weights, and fresh clones contain none.
+
+Set `FIREWALL_SEMANTIC_MODEL_PATH` to the model's absolute directory. For the
+documented model, use `FIREWALL_SEMANTIC_LABELS=INJECTION` and a probability
+threshold such as `FIREWALL_SEMANTIC_THRESHOLD=0.8`. Input beyond its 512-token
+context fails closed.
 
 The base Docker image does not install the optional semantic runtime or bundle
 weights. Base Compose explicitly disables semantic screening so a host `.env`
@@ -54,10 +58,10 @@ Changes require restarting the API and any in-process broker. Content policy
 activation cannot grant tools. Tool-policy hash changes invalidate old action
 approvals. Check `GET /v1/security/status` with the operator token after restart.
 
-New provenance and exposure tables are created idempotently on startup. Include
-them in database backups. Exposure is conservative and persists across tasks for
-up to 24 hours after untrusted input; expect more review requests. Do not clear it
-to make a blocked action succeed. All memory writes now require approval.
+Startup creates missing provenance and exposure tables idempotently; include
+them in database backups. After untrusted input, exposure persists across tasks
+for up to 24 hours, increasing review requests. Clearing it to admit an action
+bypasses that control. Every memory write requires approval.
 
 Run the 50 curl examples against a synthetic setup; they create pending approvals
 but do not execute tools. Expected decisions in the examples assume default

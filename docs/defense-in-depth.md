@@ -1,9 +1,8 @@
 # Enforced agent boundaries
 
-The firewall separates detection from authorization. A message can look harmless
-and still propose an unauthorized action. A classifier score can block a request;
-it cannot grant a tool, expand a filesystem root, authorize a recipient, or approve
-a memory write.
+A harmless-looking message can still propose an unauthorized action. Detection
+and authorization are separate: a classifier may block a request, but it cannot
+grant tools, expand filesystem roots, authorize recipients, or approve memory writes.
 
 ## Data flow
 
@@ -24,11 +23,10 @@ a memory write.
 
 ## Capability configuration
 
-`policies/default.yaml` controls content handling; `policies/tools.yaml` controls
-tool capabilities. They are separate policies. Content-policy activation cannot
-grant a tool. Tool configuration is validated and loaded on process startup;
-restart the API/broker to apply changes. The tool-policy hash is part of approval
-binding, so a changed registry invalidates existing action approvals.
+Content handling belongs in `policies/default.yaml`; tool capabilities belong in
+`policies/tools.yaml`. Activating a content policy cannot grant tools. Processes
+validate and load tool configuration at startup, so restart the API/broker after
+editing it. Changes invalidate existing action approvals through the tool-policy hash.
 
 ```yaml
 tools:
@@ -99,13 +97,13 @@ supplied by the caller; it does not retrieve a record by its ID.
 
 ## Exact approvals
 
-Review the original structured action in the trusted host before approving it.
-The pending endpoint exposes redacted metadata and a payload digest, not the raw
-action. Compute the digest as SHA-256 of UTF-8
+Approval starts with the original structured action from the trusted host.
+The pending endpoint returns redacted metadata and a payload digest without raw
+arguments. Compute SHA-256 over the UTF-8 encoding of
 `json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))`
-and compare it with the review record. The digest alone is not enough to decide
-whether an action is appropriate. The operator UI must obtain the original action
-from its trusted host, never from an injected document claiming to describe it.
+and match it to the review record. That match establishes identity, not whether
+the action is appropriate. The operator UI must obtain the action from its trusted
+host; a retrieved document claiming to describe it is untrusted.
 
 Submit the operator decision, then resubmit the exact evaluation with its
 `approval_id`. The binding includes payload, operation, source, destination,
@@ -124,12 +122,11 @@ but requires an OS sandbox for protection from malicious reader code. The
 planner should receive validated task-specific facts, not arbitrary reader text
 relabeled as trusted instructions.
 
-See [semantic screening](semantic-screening.md) for the optional local classifier,
-model provisioning, actual smoke results, context limit and accuracy limitations.
-The classifier is local and has no tools. It adds a semantic signal, not authority.
-It rejects inputs that exceed the model context instead of silently truncating them. When
-enabled, inference failure blocks the request; initialization failure prevents
-service startup. When disabled, other controls still enforce permissions.
+The [semantic screening guide](semantic-screening.md) covers provisioning, smoke
+results, context limits, and accuracy limitations. This local classifier has no
+tools or authority to grant them. It rejects over-context inputs without truncation.
+When enabled, inference errors block requests and initialization errors prevent
+startup. Permission checks also apply with the classifier disabled.
 
 ## Verification and scope
 

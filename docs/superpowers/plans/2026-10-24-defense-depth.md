@@ -3,10 +3,10 @@
 > For agentic workers: use subagent-driven-development for isolated modules and
 > review; the primary agent owns shared engine/API integration. Track progress here.
 
-Goal: enforce agent capabilities even when prompt injection is not detected.
-Architecture: structured authorization and exact approvals precede dispatch;
-authenticated provenance persists across steps; an isolated reader and optional
-local classifier add independent layers without authority to grant tools.
+Enforce agent capabilities even when detectors miss prompt injection. Before
+dispatch, validate structured authorization and exact approvals. Authenticated
+provenance persists across steps, while the isolated reader and optional local
+classifier add checks without gaining authority to grant tools.
 Tech stack: Python 3.12, FastAPI, Pydantic, SQLAlchemy, jsonschema, Transformers.
 Spec: ../specs/2026-10-24-defense-depth-design.md
 
@@ -56,8 +56,8 @@ approval gates. Each module uses red/green tests. Existing checkout is retained;
 all changes remain local and reviewable. No push, publication, or deployment.
 
 
-Completed: 127 tests pass, Ruff and pip check pass. Independent review findings
-(relative paths, Windows UTF-8, MCP identity, cross-case lineage) fixed. Real
-offline classifier provisioned and enabled; API/dashboard restarted and live probes
-verified. Documentation and 50-request examples migrated. Docker runtime was not
-available; base Compose explicitly disables the optional classifier.
+Completion checks passed: 127 tests, Ruff, and pip check. Review findings covering
+relative paths, Windows UTF-8, MCP identity, and cross-case lineage were fixed.
+The offline classifier was provisioned and enabled, then live probes passed after
+API/dashboard restart. Documentation and 50-request examples were migrated.
+Docker runtime was unavailable; base Compose explicitly disables the optional classifier.
