@@ -1,17 +1,15 @@
 # Cognitive Firewall
 
-Cognitive Firewall checks content locally before an agent reads, writes, stores, or sends it to a language model provider. It looks for supported personal data, secrets, and prompt injection, then returns a decision: allow, sanitize, block, or require operator approval.
-
-Retrieved pages and tool output can carry instructions the agent was never meant to follow. Private details in customer messages can also slip into provider requests. The firewall checks each boundary before the application continues.
+An AI model can encounter malicious instructions in retrieved pages and tool output, while customer messages may expose private details during inference. Cognitive Firewall screens content locally before an agent reads, writes, stores, or sends it to a model provider. It checks for supported personal data, secrets, and prompt injection, then allows, sanitizes, blocks, or requests operator approval.
 
 ## How it works
 
-1. Submit content with its source, destination, and operation, such as model input or a tool result.
-2. Local detectors screen it, and the active policy decides what can continue.
-3. Personal details may be redacted or replaced with case-scoped pseudonyms, whose mappings stay encrypted locally. Tool requests need registered capabilities and structured arguments as well. The OpenAI and Claude adapters accept only approved model input.
-4. The audit trail keeps decisions, scores, and policy versions without copying the content.
+1. Submit content with its source, destination, and operation.
+2. Local detectors screen it against the active policy.
+3. Personal data may be redacted or pseudonymized, with case-scoped mappings encrypted locally. Tools need registered capabilities and structured arguments. OpenAI and Claude adapters accept only approved model input.
+4. Audit records contain decisions, scores, and policy versions, without the content.
 
-Use the FastAPI service, Python SDK, MCP server, or command-line tool. The dashboard shows redacted activity and approval counts. Re-identifying a pseudonym needs separate, expiring, single-use approval.
+Use FastAPI, the Python SDK, MCP, or the CLI. The dashboard shows redacted activity and approval counts. Pseudonym re-identification needs separate, expiring, single-use approval.
 
 ## Run locally
 
@@ -24,14 +22,14 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m uvicorn cognitive_firewall.api.app:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
-Leave the API running, then check readiness and try the mock agent in another terminal. No provider key is needed:
+In another terminal, check readiness and run the mock agent without a provider key:
 
 ```powershell
 curl.exe http://127.0.0.1:8000/ready
 .\.venv\Scripts\python.exe examples\langgraph_agent.py --provider mock
 ```
 
-`scripts/init_secrets.py` adds missing credentials to `.env`. For cloud models, set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` there. Keep `.env` private. Raw personal data is processed locally, and the adapters send only content admitted for the selected provider.
+`scripts/init_secrets.py` fills missing credentials in `.env`. Add `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` for cloud models. Keep `.env` private. Adapters send only content admitted locally for that provider.
 
 For containers, run `docker compose up --build -d`. The API listens at `127.0.0.1:8000` and the dashboard at `127.0.0.1:8501`.
 
@@ -43,15 +41,15 @@ With the service running, send five synthetic examples:
 python scripts/demo_requests.py
 ```
 
-The demo allows ordinary text, pseudonymizes an email, and blocks malicious retrieval. That exposure persists, so subsequent tools and exports need approval. The demo holds an export and a privileged action for review, all locally without provider calls.
+The local demo allows ordinary text, pseudonymizes email, and blocks malicious retrieval. Exposure persists, holding subsequent tools and exports for approval, including a privileged action. It makes no provider calls.
 
-Open the [API docs](http://127.0.0.1:8000/docs) to inspect the schemas or try a request. For evaluations, use **Authorize** with `FIREWALL_AGENT_TOKEN` from your local `.env` and submit `agent_id: demo-agent` (or your configured `FIREWALL_AGENT_ID`). Each token is bound to an agent identity. Operator endpoints take the separate `FIREWALL_OPERATOR_TOKEN`, which cannot submit evaluations.
+In the [API docs](http://127.0.0.1:8000/docs), **Authorize** with `FIREWALL_AGENT_TOKEN` from `.env`. Submit its bound identity: `agent_id: demo-agent`, or your configured `FIREWALL_AGENT_ID`. Operator routes require `FIREWALL_OPERATOR_TOKEN`, which cannot evaluate content.
 
 Unlock the [dashboard](http://127.0.0.1:8501) with `FIREWALL_OPERATOR_TOKEN` from `.env` for counts and risk charts. Refresh after sending requests.
 
 ## Send evaluation requests with curl
 
-Send content to `POST http://127.0.0.1:8000/v1/evaluations` with your agent bearer token. It returns a decision, `safe_payload`, findings, scores, and an audit ID. Setting `destination` to `openai` selects the boundary to check. It makes no provider call.
+Send content to `POST http://127.0.0.1:8000/v1/evaluations` with your agent token for a decision, `safe_payload`, findings, scores, and audit ID. Setting `destination` to `openai` makes no provider call.
 
 From the project root in PowerShell, read the agent token without printing it:
 
@@ -84,13 +82,11 @@ Block an instruction hidden in retrieved content:
 '@ | curl.exe --silent --show-error --fail-with-body http://127.0.0.1:8000/v1/evaluations -H "Authorization: Bearer $env:FIREWALL_AGENT_TOKEN" -H "Content-Type: application/json" --data-binary '@-'
 ```
 
-The default policy returns `allow`, `sanitize`, and `block`, respectively. The email becomes a case-scoped pseudonym. Blocks have no usable `safe_payload`, and your application must enforce the decision. Neither `source` nor `destination` causes fetching or execution.
+Expect `allow`, `sanitize`, and `block`, respectively. Email becomes a case-scoped pseudonym. Enforce decisions in your application: blocks have no usable `safe_payload`. Neither `source` nor `destination` triggers fetching or execution.
 
 ## Exact injection and PII requests
 
-These synthetic requests used the default policies and semantic screening at threshold `0.8`, without provider calls. Reuse the PowerShell token setup above.
-
-The response excerpts show the decision, transformed content, and reason codes. Full responses also include findings, risk scores, policy hashes, and generated IDs. Treat the results as examples rather than an accuracy benchmark, since changing the model or configuration can change what gets through.
+These synthetic requests used default policies and semantic screening at threshold `0.8`, without provider calls. Reuse the token setup above. Response excerpts omit findings, scores, policy hashes, and generated IDs. Results depend on configuration and are not accuracy benchmarks.
 
 ### 1. Email, phone and IP in one request
 
@@ -107,8 +103,6 @@ The response excerpts show the decision, transformed content, and reason codes. 
 '@ | curl.exe --silent --show-error --fail-with-body http://127.0.0.1:8000/v1/evaluations -H "Authorization: Bearer $env:FIREWALL_AGENT_TOKEN" -H "Content-Type: application/json" --data-binary '@-'
 ```
 
-Measured response excerpt:
-
 ```json
 {
   "decision": "sanitize",
@@ -120,7 +114,7 @@ Measured response excerpt:
 }
 ```
 
-The phone and IP are redacted, and the email becomes a case-scoped pseudonym. Your pseudonym may differ from the one in this run because it depends on the local keys and case.
+Phone and IP are redacted. The email pseudonym depends on local keys and case.
 
 ### 2. PII in a model response
 
@@ -136,8 +130,6 @@ The phone and IP are redacted, and the email becomes a case-scoped pseudonym. Yo
 }
 '@ | curl.exe --silent --show-error --fail-with-body http://127.0.0.1:8000/v1/evaluations -H "Authorization: Bearer $env:FIREWALL_AGENT_TOKEN" -H "Content-Type: application/json" --data-binary '@-'
 ```
-
-Measured response excerpt:
 
 ```json
 {
@@ -167,8 +159,6 @@ User-facing model output uses redaction instead of reversible email pseudonyms.
 '@ | curl.exe --silent --show-error --fail-with-body http://127.0.0.1:8000/v1/evaluations -H "Authorization: Bearer $env:FIREWALL_AGENT_TOKEN" -H "Content-Type: application/json" --data-binary '@-'
 ```
 
-Measured response excerpt:
-
 ```json
 {
   "decision": "block",
@@ -179,7 +169,7 @@ Measured response excerpt:
 }
 ```
 
-The rule detector and the local semantic classifier both flagged this request.
+Rules and semantic screening both flagged this request.
 
 ### 4. Semantic injection without the override phrase
 
@@ -195,8 +185,6 @@ The rule detector and the local semantic classifier both flagged this request.
 }
 '@ | curl.exe --silent --show-error --fail-with-body http://127.0.0.1:8000/v1/evaluations -H "Authorization: Bearer $env:FIREWALL_AGENT_TOKEN" -H "Content-Type: application/json" --data-binary '@-'
 ```
-
-Measured response excerpt:
 
 ```json
 {
@@ -224,8 +212,6 @@ Only the semantic classifier caught this. With screening disabled, text rules al
 }
 '@ | curl.exe --silent --show-error --fail-with-body http://127.0.0.1:8000/v1/evaluations -H "Authorization: Bearer $env:FIREWALL_AGENT_TOKEN" -H "Content-Type: application/json" --data-binary '@-'
 ```
-
-Measured response excerpt:
 
 ```json
 {
@@ -259,8 +245,6 @@ The JSON escapes become zero-width characters. Normalization screening and the s
 '@ | curl.exe --silent --show-error --fail-with-body http://127.0.0.1:8000/v1/evaluations -H "Authorization: Bearer $env:FIREWALL_AGENT_TOKEN" -H "Content-Type: application/json" --data-binary '@-'
 ```
 
-Measured response excerpt:
-
 ```json
 {
   "decision": "block",
@@ -273,18 +257,15 @@ Measured response excerpt:
 
 This block is a false positive: the classifier flagged harmless contact JSON at threshold 0.8. Without semantic screening, default privacy rules sanitize it.
 
-Required fields are `operation`, `payload` (text or a JSON object), `source`,
-`destination`, `case_id`, and `agent_id`. Use opaque IDs without personal data.
-Supported operations are `model_input`, `retrieval`, `tool_request`, `tool_result`,
-`memory_read`, `memory_write`, `model_output`, and `export`.
+Required: `operation`, `payload` (text or JSON object), `source`, `destination`, `case_id`, and `agent_id`. Keep IDs opaque and free of personal data. Operations: `model_input`, `retrieval`, `tool_request`, `tool_result`, `memory_read`, `memory_write`, `model_output`, and `export`.
 
-The [50 curl evaluation examples](docs/evaluation-examples.md) cover ordinary content, privacy, exports, attacks, fabricated secrets, and privileged requests with expected decisions. They use Bash / WSL / Git Bash. For Windows, run the equivalent 50 requests:
+The [50 curl evaluation examples](docs/evaluation-examples.md) cover benign content, privacy, attacks, secrets, exports, and tools, with expected decisions in Bash / WSL / Git Bash. On Windows:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\examples\evaluation-requests.ps1
 ```
 
-All 50 examples use synthetic data and run without a provider key. Running them writes audit events and creates pending approval requests for memory, tools, and exports, but it neither approves those requests nor executes the actions. Refresh the dashboard afterward to see the activity.
+All 50 use synthetic data without provider keys. They record audits and queue memory, tool, and export approvals without approving or executing actions. Refresh the dashboard afterward.
 
 ## Protection beyond text matching
 
@@ -308,10 +289,7 @@ For semantic screening, install `.[semantic]` and provision a reviewed local saf
 
 Startup and inference never download weights. Fresh clones need separate provisioning of the pinned classifier used in testing.
 
-See [defense-in-depth design and integration](docs/defense-in-depth.md),
-[reader example and limits](docs/isolated-reader.md), and
-[semantic provisioning and measured results](docs/semantic-screening.md).
-Operator-authenticated `GET /v1/security/status` reports which layers are enabled.
+See [defense-in-depth design and integration](docs/defense-in-depth.md), [reader example and limits](docs/isolated-reader.md), and [semantic provisioning and measured results](docs/semantic-screening.md). Check enabled layers through operator-authenticated `GET /v1/security/status`.
 
 ## Scope
 
