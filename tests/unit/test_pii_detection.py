@@ -1,4 +1,9 @@
 from cognitive_firewall.detectors.pii import detect_pii
+
+
+def test_email_before_sentence_period_is_detected():
+    findings = detect_pii("Contact alice@example.com.")
+    assert any(item.category == "email" for item in findings)
 from cognitive_firewall.detectors.secrets import detect_secrets
 
 

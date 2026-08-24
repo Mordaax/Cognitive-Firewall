@@ -47,6 +47,9 @@ class AgentGuard:
     def before_model(self, request: EvaluationRequest) -> ApprovedPayload:
         return self._at(request, Operation.MODEL_INPUT)
 
+    def after_retrieval(self, request: EvaluationRequest) -> ApprovedPayload:
+        return self._at(request, Operation.RETRIEVAL)
+
     def before_tool(self, request: EvaluationRequest) -> ApprovedPayload:
         return self._at(request, Operation.TOOL_REQUEST)
 
