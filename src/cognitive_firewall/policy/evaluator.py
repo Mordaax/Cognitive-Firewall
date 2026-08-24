@@ -22,12 +22,15 @@ def _matches(rule: PolicyRule, request: EvaluationRequest, findings: list[Findin
     return True
 
 
-def evaluate_policy(request: EvaluationRequest, findings: list[Finding], policy: PolicyBundle) -> PolicyOutcome:
+def evaluate_policy(request: EvaluationRequest, findings: list[Finding], policy: PolicyBundle,
+                    approved: bool = False) -> PolicyOutcome:
     transformations: dict[str, str] = {}
     reasons: list[str] = []
     ttl_seconds: int | None = None
     for rule in sorted(policy.rules, key=lambda item: item.priority, reverse=True):
         if _matches(rule, request, findings):
+            if approved and rule.action == DecisionAction.REQUIRE_APPROVAL:
+                continue
             if rule.action in {DecisionAction.BLOCK, DecisionAction.REQUIRE_APPROVAL}:
                 return PolicyOutcome(action=rule.action, transformations=transformations,
                                      reason_codes=reasons + [rule.id], ttl_seconds=ttl_seconds)

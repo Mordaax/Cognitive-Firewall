@@ -77,4 +77,5 @@ class EvaluationResponse(BaseModel):
     policy_hash: str
     audit_id: str
     memory_id: str | None = None
+    approval_id: str | None = None
 

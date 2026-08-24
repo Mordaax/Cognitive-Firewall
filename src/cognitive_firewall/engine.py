@@ -15,6 +15,7 @@ from cognitive_firewall.policy.models import PolicyBundle
 from cognitive_firewall.risk import score_findings
 from cognitive_firewall.schemas import DecisionAction, EvaluationRequest, EvaluationResponse, Finding, Operation, Provenance
 from cognitive_firewall.storage.audit import AuditEvent
+from cognitive_firewall.storage.approvals import ApprovalBinding
 from cognitive_firewall.storage.memory import MemoryRecord
 from cognitive_firewall.transforms.redaction import transform_payload
 from cognitive_firewall.transforms.verification import verify_transformation
@@ -55,6 +56,20 @@ class Evaluator:
             injection_score, privacy_score = score_findings(findings)
             outcome = evaluate_policy(effective_request, findings, self.policy)
 
+            approval_id = None
+            if request.approval_id:
+                if outcome.action != DecisionAction.REQUIRE_APPROVAL or self.approval_store is None:
+                    return self._closed("approval_invalid")
+                binding = ApprovalBinding.from_request(request, self.policy.policy_hash)
+                if not self.approval_store.consume(request.approval_id, binding, datetime.now(timezone.utc)):
+                    return self._closed("approval_invalid")
+                outcome = evaluate_policy(effective_request, findings, self.policy, approved=True)
+            elif outcome.action == DecisionAction.REQUIRE_APPROVAL:
+                if self.approval_store is None:
+                    return self._closed("approval_unavailable")
+                binding = ApprovalBinding.from_request(request, self.policy.policy_hash)
+                approval_id = self.approval_store.create(binding, datetime.now(timezone.utc) + timedelta(minutes=15))
+
             if outcome.action in {DecisionAction.BLOCK, DecisionAction.REQUIRE_APPROVAL}:
                 safe_payload = None
                 decision = outcome.action
@@ -87,6 +102,6 @@ class Evaluator:
             return EvaluationResponse(decision=decision, safe_payload=safe_payload, findings=findings,
                                       reason_codes=outcome.reason_codes, injection_score=injection_score,
                                       privacy_score=privacy_score, policy_hash=self.policy.policy_hash,
-                                      audit_id=audit_id, memory_id=memory_id)
+                                      audit_id=audit_id, memory_id=memory_id, approval_id=approval_id)
         except Exception:
             return self._closed("evaluation_unavailable")
