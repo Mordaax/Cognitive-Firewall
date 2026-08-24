@@ -1,14 +1,14 @@
-# Defense in Depth Implementation Plan
+# Defense in depth implementation plan
 
 > For agentic workers: use subagent-driven-development for isolated modules and
 > review; the primary agent owns shared engine/API integration. Track progress here.
 
-**Goal:** enforce agent capabilities even when prompt injection is not detected.
-**Architecture:** structured authorization and exact approvals precede dispatch;
+Goal: enforce agent capabilities even when prompt injection is not detected.
+Architecture: structured authorization and exact approvals precede dispatch;
 authenticated provenance persists across steps; an isolated reader and optional
 local classifier add independent layers without authority to grant tools.
-**Tech Stack:** Python 3.12, FastAPI, Pydantic, SQLAlchemy, jsonschema, Transformers.
-**Spec:** ../specs/2026-10-24-defense-depth-design.md
+Tech stack: Python 3.12, FastAPI, Pydantic, SQLAlchemy, jsonschema, Transformers.
+Spec: ../specs/2026-10-24-defense-depth-design.md
 
 ## Global constraints
 

@@ -23,7 +23,7 @@ Python worker implementing this protocol. Never accept it from retrieved text,
 model output or API request fields. A host-provided worker is executable trusted
 code and must be reviewed. Reader output is always data and is never executed.
 
-This is process and credential separation, **not an OS security sandbox**. The
+The reader runs in a separate process without inheriting credentials. It is not an OS security sandbox. The
 worker runs with the host user's filesystem and network privileges and may read
 files accessible to that user, including credential files outside its working
 directory. There are no CPU/memory, network, filesystem ACL or process-tree limits.
@@ -40,7 +40,7 @@ handler registry, and calls the trusted evaluator immediately before dispatch.
 Production uses the full `Evaluator` or authenticated `FirewallClient`, with the
 server's tool registry, argument schemas, resource restrictions and exact operator
 approval checks. Unknown callbacks, denials, approval requirements and evaluator
-failures run no handler. The actual returned safe payload is copied and must be
+failures run no handler. The broker copies the returned safe payload, which must be
 an object identical to the original action arguments. A sanitizer that changes
 an action requires a new request and approval; targets are never silently changed.
 Sensitive approvals are single-use under the engine. Every execution re-evaluates.

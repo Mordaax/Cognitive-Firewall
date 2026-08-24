@@ -127,7 +127,7 @@ relabeled as trusted instructions.
 See [semantic screening](semantic-screening.md) for the optional local classifier,
 model provisioning, actual smoke results, context limit and accuracy limitations.
 The classifier is local and has no tools. It adds a semantic signal, not authority.
-It rejects over-context inputs instead of quietly ignoring their tails. When
+It rejects inputs that exceed the model context instead of silently truncating them. When
 enabled, inference failure blocks the request; initialization failure prevents
 service startup. When disabled, other controls still enforce permissions.
 
@@ -139,7 +139,7 @@ switching, memory persistence failures, reader credentials, timeouts, malformed
 outputs, encoded instructions and classifier failures. An integration example
 uses real local storage and a harmless callback without paid provider calls.
 
-This is not protection against hostile code in the trusted broker process, direct
+These controls do not protect against hostile code in the trusted broker process, direct
 provider/tool calls that bypass it, model-weight changes, poisoned training data,
 model extraction or arbitrary adversarial images. Model-level and training-time
 attacks require separate artifact integrity, access control and evaluation measures.

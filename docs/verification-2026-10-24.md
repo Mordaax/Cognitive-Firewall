@@ -1,4 +1,4 @@
-# Defense-in-depth verification — 2026-10-24
+# Defense-in-depth verification: 2026-10-24
 
 All work is local. No provider requests or paid model calls were made.
 

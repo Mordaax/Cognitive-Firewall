@@ -28,7 +28,7 @@ The response includes `decision`, `safe_payload`, `findings`, `reason_codes`, `i
 CLI commands: `scan`, `sanitize`, `policy validate`, `report export`, `approval decide`, `mapping request-reidentify`, and `mapping reidentify`. Credentials are read only from `FIREWALL_AGENT_TOKEN` or `FIREWALL_OPERATOR_TOKEN` in the environment; there is no `--token` argument. For re-identification, request an approval, decide it as operator, then supply the approval ID to `mapping reidentify`. `sanitize` writes to a separate output path and supports `--dry-run`. The MCP stdio server exposes `evaluate_content` and `sanitize_content` with the same request and response schemas.
 
 For interactive schema inspection on a development machine, run `mcp dev scripts/mcp_inspector.py:server` after initializing `.env`. The normal stdio entry point remains `python -m cognitive_firewall.mcp.server`.
-# Security extension: identity, tools and provenance
+# Agent identity, tools and provenance
 
 Evaluation requests must use the agent identity bound to their bearer token.
 `FIREWALL_AGENT_ID` defaults to `demo-agent`. Extra tokens are configured with
@@ -44,8 +44,8 @@ equivalent exact-action checks before its own side effects.
 
 Admitted responses may include `provenance_id`. To reuse the exact content, supply
 it as request `provenance_id`; to evaluate derived content, supply parent references
-as `lineage_ids` (at most 32). Wrong content, unknown handles, expired references or
-cross-agent/case references block. All references remain untrusted. Omitting them
+as `lineage_ids` (at most 32). The firewall blocks mismatched content, unknown handles, expired references and
+references from another agent or case. All references remain untrusted. Omitting them
 does not clear the agent's persisted exposure state.
 
 `GET /v1/security/status` requires the operator credential and returns the
