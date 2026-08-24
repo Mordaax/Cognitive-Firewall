@@ -76,4 +76,5 @@ class EvaluationResponse(BaseModel):
     privacy_score: int = Field(ge=0, le=100)
     policy_hash: str
     audit_id: str
+    memory_id: str | None = None
 

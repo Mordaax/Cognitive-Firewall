@@ -23,8 +23,20 @@ def _matches(rule: PolicyRule, request: EvaluationRequest, findings: list[Findin
 
 
 def evaluate_policy(request: EvaluationRequest, findings: list[Finding], policy: PolicyBundle) -> PolicyOutcome:
+    transformations: dict[str, str] = {}
+    reasons: list[str] = []
+    ttl_seconds: int | None = None
     for rule in sorted(policy.rules, key=lambda item: item.priority, reverse=True):
         if _matches(rule, request, findings):
-            return PolicyOutcome(action=rule.action, transformations=rule.transformations,
-                                 reason_codes=[rule.id], ttl_seconds=rule.ttl_seconds)
+            if rule.action in {DecisionAction.BLOCK, DecisionAction.REQUIRE_APPROVAL}:
+                return PolicyOutcome(action=rule.action, transformations=transformations,
+                                     reason_codes=reasons + [rule.id], ttl_seconds=ttl_seconds)
+            if rule.action == DecisionAction.SANITIZE:
+                transformations.update(rule.transformations)
+                reasons.append(rule.id)
+                ttl_seconds = ttl_seconds or rule.ttl_seconds
+            elif rule.action == DecisionAction.ALLOW:
+                return PolicyOutcome(action=DecisionAction.SANITIZE if transformations else DecisionAction.ALLOW,
+                                     transformations=transformations, reason_codes=reasons or [rule.id],
+                                     ttl_seconds=ttl_seconds)
     return PolicyOutcome(action=DecisionAction.BLOCK, reason_codes=["policy_no_match"])
