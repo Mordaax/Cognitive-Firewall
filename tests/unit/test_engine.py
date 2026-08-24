@@ -3,6 +3,7 @@ from pathlib import Path
 from cognitive_firewall.engine import Evaluator
 from cognitive_firewall.policy.loader import load_policy
 from cognitive_firewall.schemas import DecisionAction, EvaluationRequest, Operation
+from cognitive_firewall.storage.approvals import ApprovalStore
 from cognitive_firewall.storage.audit import SqlAuditStore
 from cognitive_firewall.storage.db import Database
 from cognitive_firewall.storage.mappings import SqlMappingStore
@@ -17,6 +18,7 @@ def evaluator():
         SqlAuditStore(db),
         SqlMappingStore(db, encryption_key=b"e" * 32, hmac_key=b"h" * 32),
         SqlMemoryStore(db),
+        approval_store=ApprovalStore(db),
     )
 
 
@@ -53,6 +55,11 @@ def test_evaluator_blocks_secret_and_high_risk_retrieval():
 def test_memory_write_stores_only_sanitized_content():
     service = evaluator()
     response = service.evaluate(request("alice@example.com", Operation.MEMORY_WRITE))
+    assert response.decision == "require_approval"
+    assert response.memory_id is None
+    assert service.approval_store.decide(response.approval_id, approve=True)
+    response = service.evaluate(request("alice@example.com", Operation.MEMORY_WRITE).model_copy(
+        update={"approval_id": response.approval_id}))
     assert response.memory_id
     stored = service.memory_store.read(response.memory_id)
     assert stored and stored.content == response.safe_payload

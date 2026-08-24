@@ -5,6 +5,8 @@ services:
     environment:
       FIREWALL_DATABASE_URL: ${FIREWALL_DATABASE_URL:-sqlite:////data/firewall.sqlite3}
       FIREWALL_POLICY_PATH: /app/policies/default.yaml
+      # Base image has no semantic runtime/model. Override only with a provisioned image.
+      FIREWALL_SEMANTIC_MODEL_PATH: ""
     volumes:
       - firewall-data:/data
     ports:

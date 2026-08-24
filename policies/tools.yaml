@@ -1,0 +1,67 @@
+# Host-owned tool capabilities. Register actual executor callbacks separately.
+# These grants are for the synthetic demo agent only.
+tools:
+  tool:search:
+    agents: [demo-agent]
+    read_only: true
+    input_schema:
+      type: object
+      properties:
+        query: {type: string, maxLength: 2000}
+      required: [query]
+      additionalProperties: false
+  tool:ticket:
+    agents: [demo-agent]
+    read_only: true
+    input_schema:
+      type: object
+      properties:
+        query: {type: string, maxLength: 2000}
+      required: [query]
+      additionalProperties: false
+  privileged:restart:
+    agents: [demo-agent]
+    require_approval: true
+    input_schema:
+      type: object
+      properties:
+        service: {type: string, enum: [demo]}
+      required: [service]
+      additionalProperties: false
+  privileged:deploy:
+    agents: [demo-agent]
+    require_approval: true
+    input_schema:
+      type: object
+      properties:
+        release: {type: string, enum: [demo]}
+      required: [release]
+      additionalProperties: false
+  privileged:backup:
+    agents: [demo-agent]
+    require_approval: true
+    input_schema:
+      type: object
+      properties:
+        database: {type: string, enum: [demo]}
+      required: [database]
+      additionalProperties: false
+  privileged:configure:
+    agents: [demo-agent]
+    require_approval: true
+    input_schema:
+      type: object
+      properties:
+        action: {type: string, enum: [change_demo_setting]}
+        value: {type: string, enum: [enabled, disabled]}
+      required: [action, value]
+      additionalProperties: false
+  privileged:maintenance:
+    agents: [demo-agent]
+    require_approval: true
+    input_schema:
+      type: object
+      properties:
+        task: {type: string, enum: [demo]}
+      required: [task]
+      additionalProperties: false

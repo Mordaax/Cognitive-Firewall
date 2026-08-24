@@ -27,7 +27,7 @@ def test_mcp_evaluation_matches_engine_contract():
         source="user",
         destination="openai",
         case_id="c1",
-        agent_id="a1",
+        agent_id="demo-agent",
     )
 
     async def run():

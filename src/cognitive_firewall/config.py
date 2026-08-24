@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -15,6 +16,12 @@ class Settings:
     database_url: str = "sqlite:///./firewall.sqlite3"
     policy_path: str = "policies/default.yaml"
     redis_url: str | None = None
+    agent_id: str = "demo-agent"
+    agent_tokens: dict[str, str] = field(default_factory=dict, repr=False)
+    tools_path: str = "policies/tools.yaml"
+    semantic_model_path: str | None = None
+    semantic_threshold: float = 0.8
+    semantic_labels: tuple[str, ...] = ("INJECTION",)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -44,4 +51,10 @@ class Settings:
             database_url=os.environ.get("FIREWALL_DATABASE_URL", "sqlite:///./firewall.sqlite3"),
             policy_path=os.environ.get("FIREWALL_POLICY_PATH", "policies/default.yaml"),
             redis_url=os.environ.get("FIREWALL_REDIS_URL") or None,
+            agent_id=os.environ.get("FIREWALL_AGENT_ID", "demo-agent"),
+            agent_tokens=json.loads(os.environ.get("FIREWALL_AGENT_TOKENS", "{}")),
+            tools_path=os.environ.get("FIREWALL_TOOLS_PATH", "policies/tools.yaml"),
+            semantic_model_path=os.environ.get("FIREWALL_SEMANTIC_MODEL_PATH") or None,
+            semantic_threshold=float(os.environ.get("FIREWALL_SEMANTIC_THRESHOLD", "0.8")),
+            semantic_labels=tuple(os.environ.get("FIREWALL_SEMANTIC_LABELS", "INJECTION").split(",")),
         )

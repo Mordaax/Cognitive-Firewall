@@ -10,3 +10,8 @@ __pycache__/
 *.db
 tests/
 data/
+.models/
+.setup-tmp/
+.local-processes.json
+local-dashboard.png
+*.log

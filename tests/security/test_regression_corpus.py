@@ -27,7 +27,7 @@ CORPUS = [
         "quoted_attack",
         'The report quotes "ignore previous instructions" as an attack example.',
         False,
-        False,
+        True,
         True,
     ),
     ("benign_role_word", "The system: operational status is healthy", False, False, True),

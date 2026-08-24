@@ -19,3 +19,35 @@ Approval IDs are random, expire after 15 minutes, and can be consumed once. A ch
 The local regex and heuristic detectors are an MVP control. They can miss obfuscated PII, multilingual identifiers, uncommon secret formats, and novel prompt injections, or flag benign instructions. This is a control layer, not proof that arbitrary content is safe. The SDK cannot stop callers that directly invoke a vendor client. The pilot does not support multiple tenants or distributed policy synchronization. Review false positives and misses using sanitized fixtures, update the policy and detector corpus, and retest before changing deployment scope.
 
 Never enable verbose HTTP request logging or provider SDK debug logging with live content. Keep the API and dashboard bound to `127.0.0.1` and restrict access to `.env`, SQLite/Postgres data, and backups.
+# Additional capability and lineage controls
+
+Authorization is independent of attack detection. HTTP tokens and MCP servers are
+bound to agent identities; the operator token cannot submit evaluations. Tool
+requests default to deny unless registered with structured schemas and agent
+grants. Effectful tools require approval unless the trusted host explicitly marks
+them read-only. Resource restrictions are configuration constraints, not a network
+proxy or secure filesystem implementation. Executor callbacks must enforce DNS,
+redirect, symlink and junction safety at the actual I/O boundary.
+
+The broker binds agent and case and checks exact action admission before dispatch.
+An immutable Python payload wrapper is not an OS capability: hostile Python in the
+same trusted process can bypass it. Isolate untrusted code and prevent direct tool
+or provider access outside the broker using deployment controls.
+
+Provenance references are opaque, agent/case-bound, content-bound and expiring.
+Persisted untrusted exposure follows an agent across cases for at most 24 hours
+after exposure; callers cannot restore trust by omitting references or switching
+case IDs. Every durable memory write requires operator review. Approvals bind both
+content-policy and tool-policy hashes and the complete submitted provenance. Review
+the original action in the trusted host; a digest-only pending record does not
+establish that an action is desirable.
+
+The included reader subprocess strips credentials and validates bounded JSON
+outputs, but retains the OS user's filesystem/network access. It is not a sandbox.
+Its paragraph extractor does not remove malicious meaning. Returned strings remain
+untrusted. Semantic classification is optional and local; enabled failures and
+over-context inputs fail closed. No classifier guarantees prompt-injection safety.
+Quoted attack framing no longer lowers detector severity based on attacker text.
+
+For details and operational costs see [defense in depth](defense-in-depth.md),
+[isolated reader](isolated-reader.md) and [semantic screening](semantic-screening.md).

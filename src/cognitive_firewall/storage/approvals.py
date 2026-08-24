@@ -29,6 +29,7 @@ class ApprovalBinding:
     destination: str
     agent_id: str
     provenance_digest: str
+    security_hash: str = ""
 
     @classmethod
     def for_reidentification(cls, case_id: str, token: str, policy_hash: str) -> "ApprovalBinding":
@@ -44,10 +45,12 @@ class ApprovalBinding:
         )
 
     @classmethod
-    def from_request(cls, request: EvaluationRequest, policy_hash: str) -> "ApprovalBinding":
+    def from_request(cls, request: EvaluationRequest, policy_hash: str,
+                     security_hash: str = "") -> "ApprovalBinding":
         raw = json.dumps(request.payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         provenance = json.dumps(
-            request.provenance.model_dump(mode="json") if request.provenance else None,
+            {"provenance": request.provenance.model_dump(mode="json") if request.provenance else None,
+             "provenance_id": request.provenance_id, "lineage_ids": request.lineage_ids},
             sort_keys=True,
             separators=(",", ":"),
         )
@@ -60,6 +63,7 @@ class ApprovalBinding:
             request.destination,
             request.agent_id,
             hashlib.sha256(provenance.encode("utf-8")).hexdigest(),
+            security_hash,
         )
 
     def digest(self) -> str:

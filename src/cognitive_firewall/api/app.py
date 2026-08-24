@@ -14,6 +14,8 @@ from cognitive_firewall.api.routes import install_routes
 from cognitive_firewall.config import Settings
 from cognitive_firewall.engine import Evaluator
 from cognitive_firewall.policy.loader import load_policy
+from cognitive_firewall.security.provenance import ProvenanceStore
+from cognitive_firewall.security.tools import ToolRegistry
 from cognitive_firewall.storage.approvals import ApprovalStore
 from cognitive_firewall.storage.audit import SqlAuditStore
 from cognitive_firewall.storage.cache import RedisReportCache
@@ -45,6 +47,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         policies.activate(policy, policy_path.read_bytes())
     audit = SqlAuditStore(db)
     approvals = ApprovalStore(db, audit)
+    semantic_detector = None
+    if settings.semantic_model_path:
+        from cognitive_firewall.detectors.semantic import LocalSemanticDetector
+        semantic_detector = LocalSemanticDetector(
+            settings.semantic_model_path, malicious_labels=set(settings.semantic_labels))
     evaluator = Evaluator(
         policy,
         audit,
@@ -54,6 +61,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         SqlMemoryStore(db),
         approvals,
         policy_store=policies,
+        tool_registry=ToolRegistry.from_file(Path(settings.tools_path)),
+        provenance_store=ProvenanceStore(db),
+        semantic_detector=semantic_detector,
+        semantic_threshold=settings.semantic_threshold,
     )
     app.state.evaluator = evaluator
     cache = None

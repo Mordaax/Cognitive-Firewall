@@ -85,7 +85,7 @@ def _file_request(
 def scan(
     path: Path,
     case_id: str = "default",
-    agent_id: str = "cli",
+    agent_id: str = "demo-agent",
     destination: str = "internal",
     base_url: str = "http://127.0.0.1:8000",
 ) -> None:
@@ -111,7 +111,7 @@ def sanitize(
     source: Path,
     output: Path,
     case_id: str = "default",
-    agent_id: str = "cli",
+    agent_id: str = "demo-agent",
     destination: str = "internal",
     base_url: str = "http://127.0.0.1:8000",
     dry_run: bool = False,

@@ -29,7 +29,7 @@ def test_operator_reports_are_aggregated_and_redacted():
                     "source": "user",
                     "destination": "openai",
                     "case_id": "case-1",
-                    "agent_id": "agent-1",
+                    "agent_id": "demo-agent",
                 },
             )
         forbidden = client.get("/v1/reports/export", headers=headers)
@@ -39,7 +39,7 @@ def test_operator_reports_are_aggregated_and_redacted():
         assert exported.status_code == 200
         assert "alice@example.com" not in exported.text
         assert "Ignore previous instructions" not in exported.text
-        summary = client.get("/v1/reports/summary?agent_id=agent-1", headers=operator)
+        summary = client.get("/v1/reports/summary?agent_id=demo-agent", headers=operator)
         assert summary.status_code == 200
         assert summary.json()["total"] == 3
         assert summary.json()["blocked"] == 1

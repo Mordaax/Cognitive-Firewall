@@ -65,7 +65,7 @@ def main() -> None:
                 "source": "retrieval",
                 "destination": "model",
                 "case_id": "smoke-case",
-                "agent_id": "smoke-agent",
+                "agent_id": environment.get("FIREWALL_AGENT_ID", "demo-agent"),
             },
             headers={"Authorization": "Bearer " + environment["FIREWALL_AGENT_TOKEN"]},
             timeout=10,

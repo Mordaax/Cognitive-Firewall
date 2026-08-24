@@ -3,6 +3,9 @@ from pathlib import Path
 
 from cognitive_firewall.engine import Evaluator
 from cognitive_firewall.policy.loader import load_policy
+from cognitive_firewall.security.provenance import ProvenanceStore
+from cognitive_firewall.security.tools import ToolRegistry
+from cognitive_firewall.storage.approvals import ApprovalStore
 from cognitive_firewall.storage.audit import SqlAuditStore
 from cognitive_firewall.storage.db import Database
 from cognitive_firewall.storage.mappings import SqlMappingStore
@@ -18,6 +21,9 @@ def test_langgraph_workflow_checks_all_boundaries_and_keeps_model_egress_safe():
         SqlAuditStore(db),
         SqlMappingStore(db, encryption_key=b"e" * 32, hmac_key=b"h" * 32),
         SqlMemoryStore(db),
+        approval_store=ApprovalStore(db),
+        tool_registry=ToolRegistry.from_file(Path("policies/tools.yaml")),
+        provenance_store=ProvenanceStore(db),
     )
     fixture = json.loads(Path("examples/data/synthetic_incident.json").read_text())
     captured = []
@@ -39,8 +45,9 @@ def test_langgraph_workflow_checks_all_boundaries_and_keeps_model_egress_safe():
     ]
     assert result["decisions"]["retrieval"] == "block"
     assert result["decisions"]["tool_result"] == "block"
-    assert result["memory_id"]
-    assert engine.memory_store.read(result["memory_id"])
+    assert result["decisions"]["memory_write"] == "require_approval"
+    assert result["decisions"]["tool_request"] == "require_approval"
+    assert not result["memory_id"]
     assert captured and "alice@example.com" not in str(captured)
     assert "CUST-123456" not in str(captured)
     assert "alice@example.com" not in str(result)

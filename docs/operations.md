@@ -23,3 +23,60 @@ Back up the SQLite/Postgres database and `.env` in separate access-controlled lo
 ## Verification
 
 Run `.\.venv\Scripts\python.exe -m pytest -q`, Ruff, and the synthetic LangGraph example. The Docker smoke gate requires Docker Desktop's Linux engine running. Check that provider request capture contains only pseudonyms/redactions, and that audit/report/dashboard outputs contain no raw fixture PII. The verification report documents measured results and any unavailable gates.
+# Operating the stricter boundaries
+
+New installs need the core `jsonschema` dependency. Run `pip install -e ".[dev,full]"`
+after upgrading. Optional semantic inference additionally needs `.[semantic]` and
+a reviewed local model; see [provisioning](semantic-screening.md). Startup never
+downloads weights. Set `FIREWALL_SEMANTIC_MODEL_PATH` to an absolute model directory,
+`FIREWALL_SEMANTIC_LABELS=INJECTION` for the documented model, and a probability
+threshold such as `FIREWALL_SEMANTIC_THRESHOLD=0.8`. Its supported context is 512
+tokens; longer input fails closed. Fresh clones do not include the model assets.
+
+The base Docker image does not install the optional semantic runtime or bundle
+weights. Base Compose explicitly disables semantic screening so a host `.env`
+containing a Windows model path cannot break container startup. To enable it in a
+container, build an image with `.[semantic]`, mount a reviewed model directory
+read-only, and override `FIREWALL_SEMANTIC_MODEL_PATH` with its Linux mount path.
+The native Windows deployment was tested; Docker runtime validation was unavailable
+on this machine. Model directories and local setup files are excluded from builds.
+
+Bind `FIREWALL_AGENT_TOKEN` to `FIREWALL_AGENT_ID` (default `demo-agent`). Configure
+additional identities using private JSON `FIREWALL_AGENT_TOKENS`; tokens must be
+unique and separate from the operator credential. Update CLI `--agent-id` and curl
+bodies to match. The operator token no longer submits evaluations. MCP uses the
+configured primary agent identity. Do not expose operator credentials to agents or
+reader workers.
+
+`FIREWALL_TOOLS_PATH` defaults to `policies/tools.yaml`. Register only trusted tool
+implementations with closed schemas, agent grants and explicit resource limits.
+Changes require restarting the API and any in-process broker. Content policy
+activation cannot grant tools. Tool-policy hash changes invalidate old action
+approvals. Check `GET /v1/security/status` with the operator token after restart.
+
+New provenance and exposure tables are created idempotently on startup. Include
+them in database backups. Exposure is conservative and persists across tasks for
+up to 24 hours after untrusted input; expect more review requests. Do not clear it
+to make a blocked action succeed. All memory writes now require approval.
+
+Run the 50 curl examples against a synthetic setup; they create pending approvals
+but do not execute tools. Expected decisions in the examples assume default
+policies and semantic screening disabled; a configured classifier may block more.
+The mock LangGraph workflow reports held steps instead of approving them itself.
+The separate isolated-reader example contains an explicit synthetic host approval
+to demonstrate the full local cycle; never copy automatic approval into production.
+
+## Validation commands
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m pip check
+.\.venv\Scripts\python.exe examples\langgraph_agent.py --provider mock
+.\.venv\Scripts\python.exe examples\isolated_reader.py
+```
+
+Before approving a pending action, compare the trusted host's original structured
+action with its canonical digest in the review record. Keep original arguments
+out of shared logs. An approved callback that fails is not automatically retried;
+obtain new approval after checking whether any side effect already occurred.

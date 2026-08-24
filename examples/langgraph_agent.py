@@ -15,6 +15,9 @@ from cognitive_firewall.policy.loader import load_policy
 from cognitive_firewall.schemas import EvaluationRequest, Operation
 from cognitive_firewall.sdk.guard import AgentGuard, EgressDenied
 from cognitive_firewall.sdk.providers import ClaudeAdapter, OpenAIAdapter
+from cognitive_firewall.security.provenance import ProvenanceStore
+from cognitive_firewall.security.tools import ToolRegistry
+from cognitive_firewall.storage.approvals import ApprovalStore
 from cognitive_firewall.storage.audit import SqlAuditStore
 from cognitive_firewall.storage.db import Database
 from cognitive_firewall.storage.mappings import SqlMappingStore
@@ -53,6 +56,9 @@ def _mock_engine() -> Evaluator:
         audit,
         SqlMappingStore(db, encryption_key=os.urandom(32), hmac_key=os.urandom(32)),
         SqlMemoryStore(db),
+        approval_store=ApprovalStore(db, audit),
+        tool_registry=ToolRegistry.from_file(Path(__file__).resolve().parents[1] / "policies/tools.yaml"),
+        provenance_store=ProvenanceStore(db),
     )
 
 
@@ -152,7 +158,7 @@ def run_demo(
             state,
             Operation.TOOL_REQUEST,
             guard.before_tool,
-            "lookup synthetic ticket",
+            {"query": "lookup synthetic ticket"},
             "agent",
             "tool:ticket",
         )

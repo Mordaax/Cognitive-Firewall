@@ -64,6 +64,7 @@ class Finding(BaseModel):
 
 
 class EvaluationRequest(BaseModel):
+    model_config = {"extra": "forbid"}
     operation: Operation
     payload: str | dict[str, Any]
     source: str = Field(min_length=1)
@@ -72,6 +73,8 @@ class EvaluationRequest(BaseModel):
     agent_id: str = Field(min_length=1)
     provenance: Provenance | None = None
     approval_id: str | None = None
+    provenance_id: str | None = Field(default=None, max_length=96)
+    lineage_ids: list[str] = Field(default_factory=list, max_length=32)
 
     @field_validator("case_id", "agent_id")
     @classmethod
@@ -100,3 +103,4 @@ class EvaluationResponse(BaseModel):
     audit_id: str
     memory_id: str | None = None
     approval_id: str | None = None
+    provenance_id: str | None = None

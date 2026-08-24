@@ -26,7 +26,7 @@ def payload(text="alice@example.com", **changes):
         source="user",
         destination="openai",
         case_id="case-1",
-        agent_id="agent-1",
+        agent_id="demo-agent",
     )
     result.update(changes)
     return result
@@ -59,7 +59,7 @@ def test_evaluation_batch_and_paginated_audit():
 def test_approval_and_policy_activation():
     with client() as app:
         privileged = payload(
-            "send alice@example.com", operation="tool_request", destination="privileged:ticket"
+            {"service": "demo"}, operation="tool_request", destination="privileged:restart"
         )
         pending = app.post("/v1/evaluations", json=privileged, headers=AGENT).json()
         assert pending["decision"] == "require_approval"
@@ -68,8 +68,8 @@ def test_approval_and_policy_activation():
         review = app.get(f"/v1/approvals/{approval_id}", headers=OPERATOR)
         assert review.status_code == 200
         assert review.json()["operation"] == "tool_request"
-        assert review.json()["destination"] == "privileged:ticket"
-        assert review.json()["agent_id"] == "agent-1"
+        assert review.json()["destination"] == "privileged:restart"
+        assert review.json()["agent_id"] == "demo-agent"
         assert "alice@example.com" not in review.text
         listing = app.get("/v1/approvals/pending", headers=OPERATOR)
         assert listing.status_code == 200
@@ -88,7 +88,7 @@ def test_approval_and_policy_activation():
         )
         privileged["approval_id"] = approval_id
         approved = app.post("/v1/evaluations", json=privileged, headers=AGENT).json()
-        assert approved["decision"] == "sanitize"
+        assert approved["decision"] == "allow"
         assert "alice@example.com" not in str(approved)
         current = app.get("/v1/policies", headers=OPERATOR).json()
         assert current["active_policy_hash"]

@@ -84,16 +84,20 @@ def install_routes(
 
     @app.post("/v1/evaluations", response_model=EvaluationResponse)
     def evaluate(
-        request: EvaluationRequest, _: Annotated[Principal, Depends(agent)]
+        request: EvaluationRequest, principal: Annotated[Principal, Depends(agent)]
     ) -> EvaluationResponse:
+        if principal.role != "agent" or request.agent_id != principal.agent_id:
+            raise HTTPException(status_code=403, detail="agent identity mismatch")
         return evaluator.evaluate(request)
 
     @app.post("/v1/evaluations/batch", response_model=BatchResponse)
     def evaluate_batch(
-        requests: list[EvaluationRequest], _: Annotated[Principal, Depends(agent)]
+        requests: list[EvaluationRequest], principal: Annotated[Principal, Depends(agent)]
     ) -> BatchResponse:
         if len(requests) > 100:
             raise HTTPException(status_code=422, detail="batch too large")
+        if principal.role != "agent" or any(r.agent_id != principal.agent_id for r in requests):
+            raise HTTPException(status_code=403, detail="agent identity mismatch")
         return BatchResponse(items=[evaluator.evaluate(request) for request in requests])
 
     @app.get("/v1/policies")
@@ -103,6 +107,17 @@ def install_routes(
             "active_policy_hash": policies.active_hash(),
             "version": policy.version if policy else None,
             "rule_ids": [rule.id for rule in policy.rules] if policy else [],
+        }
+
+    @app.get("/v1/security/status")
+    def security_status(_: Annotated[Principal, Depends(operator)]) -> dict:
+        return {
+            "tool_authorization": "default_deny",
+            "tool_policy_hash": evaluator.tool_registry.policy_hash,
+            "provenance": "enabled" if evaluator.provenance_store else "disabled",
+            "semantic_screening": "enabled" if evaluator.semantic_detector else "disabled",
+            "semantic_threshold": evaluator.semantic_threshold,
+            "memory_write_approval": "required",
         }
 
     @app.post("/v1/policies/activate")
