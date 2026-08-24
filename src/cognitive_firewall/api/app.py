@@ -16,6 +16,7 @@ from cognitive_firewall.engine import Evaluator
 from cognitive_firewall.policy.loader import load_policy
 from cognitive_firewall.storage.approvals import ApprovalStore
 from cognitive_firewall.storage.audit import SqlAuditStore
+from cognitive_firewall.storage.cache import RedisReportCache
 from cognitive_firewall.storage.db import Database
 from cognitive_firewall.storage.mappings import SqlMappingStore
 from cognitive_firewall.storage.memory import SqlMemoryStore
@@ -36,18 +37,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Cognitive Firewall", version="0.1.0")
     db = Database(settings.database_url)
     db.create_all()
-    policy = load_policy(Path(settings.policy_path))
     policies = SqlPolicyStore(db)
-    if policies.active_hash() != policy.policy_hash:
-        policies.activate(policy)
+    policy = policies.active_bundle()
+    if policy is None:
+        policy_path = Path(settings.policy_path)
+        policy = load_policy(policy_path)
+        policies.activate(policy, policy_path.read_bytes())
     audit = SqlAuditStore(db)
     approvals = ApprovalStore(db, audit)
-    evaluator = Evaluator(policy, audit, SqlMappingStore(db, encryption_key=_key(settings.mapping_key),
-                                                     hmac_key=_key(settings.hmac_key)),
-                          SqlMemoryStore(db), approvals)
+    evaluator = Evaluator(
+        policy,
+        audit,
+        SqlMappingStore(
+            db, encryption_key=_key(settings.mapping_key), hmac_key=_key(settings.hmac_key)
+        ),
+        SqlMemoryStore(db),
+        approvals,
+    )
     app.state.evaluator = evaluator
-    install_routes(app, db=db, evaluator=evaluator, approvals=approvals,
-                   policies=policies, auth=Authenticator(settings))
+    cache = None
+    if settings.redis_url:
+        import redis
+
+        cache = RedisReportCache(redis.Redis.from_url(settings.redis_url))
+    install_routes(
+        app,
+        db=db,
+        evaluator=evaluator,
+        approvals=approvals,
+        policies=policies,
+        auth=Authenticator(settings),
+        report_cache=cache,
+    )
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_: Request, __: RequestValidationError) -> JSONResponse:

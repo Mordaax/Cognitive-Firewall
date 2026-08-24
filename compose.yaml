@@ -1,0 +1,43 @@
+services:
+  api:
+    build: .
+    env_file: .env
+    environment:
+      FIREWALL_DATABASE_URL: ${FIREWALL_DATABASE_URL:-sqlite:////data/firewall.sqlite3}
+      FIREWALL_POLICY_PATH: /app/policies/default.yaml
+    volumes:
+      - firewall-data:/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+  dashboard:
+    build: .
+    env_file: .env
+    environment:
+      FIREWALL_API_URL: http://api:8000
+    command: ["streamlit", "run", "src/cognitive_firewall/dashboard/app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8501:8501"
+  postgres:
+    image: postgres:17-alpine
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: firewall
+      POSTGRES_USER: firewall
+      POSTGRES_PASSWORD: ${FIREWALL_POSTGRES_PASSWORD:-}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+  redis:
+    image: redis:7-alpine
+    profiles: ["redis"]
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+volumes:
+  firewall-data:
+  postgres-data:

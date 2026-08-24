@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import httpx
 from urllib.parse import urlsplit
+
+import httpx
 
 from cognitive_firewall.schemas import EvaluationRequest, EvaluationResponse
 
@@ -16,16 +17,30 @@ def _local_only(base_url: str, transport: object | None) -> None:
     if transport is not None:
         return
     parsed = urlsplit(base_url)
-    if parsed.scheme not in {"http", "https"} or parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+    if parsed.scheme not in {"http", "https"} or parsed.hostname not in {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+    }:
         raise ValueError("firewall API must be on loopback to keep raw content local")
 
 
 class FirewallClient:
-    def __init__(self, base_url: str, token: str, *, transport: httpx.BaseTransport | None = None,
-                 timeout: float = 10.0):
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        *,
+        transport: httpx.BaseTransport | None = None,
+        timeout: float = 10.0,
+    ):
         _local_only(base_url, transport)
-        self._client = httpx.Client(base_url=base_url, headers={"Authorization": f"Bearer {token}"},
-                                    transport=transport, timeout=timeout)
+        self._client = httpx.Client(
+            base_url=base_url,
+            headers={"Authorization": f"Bearer {token}"},
+            transport=transport,
+            timeout=timeout,
+        )
 
     def evaluate(self, request: EvaluationRequest) -> EvaluationResponse:
         try:
@@ -46,15 +61,27 @@ class FirewallClient:
 
 
 class AsyncFirewallClient:
-    def __init__(self, base_url: str, token: str, *, transport: httpx.AsyncBaseTransport | None = None,
-                 timeout: float = 10.0):
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+        timeout: float = 10.0,
+    ):
         _local_only(base_url, transport)
-        self._client = httpx.AsyncClient(base_url=base_url, headers={"Authorization": f"Bearer {token}"},
-                                         transport=transport, timeout=timeout)
+        self._client = httpx.AsyncClient(
+            base_url=base_url,
+            headers={"Authorization": f"Bearer {token}"},
+            transport=transport,
+            timeout=timeout,
+        )
 
     async def evaluate(self, request: EvaluationRequest) -> EvaluationResponse:
         try:
-            result = await self._client.post("/v1/evaluations", json=request.model_dump(mode="json"))
+            result = await self._client.post(
+                "/v1/evaluations", json=request.model_dump(mode="json")
+            )
             result.raise_for_status()
             return EvaluationResponse.model_validate(result.json())
         except (httpx.HTTPError, ValueError) as exc:

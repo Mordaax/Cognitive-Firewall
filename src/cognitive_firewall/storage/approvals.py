@@ -1,12 +1,15 @@
 """Opaque, exact-match, single-use operator approvals."""
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import hashlib
 import json
 import secrets
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import cast
 
 from sqlalchemy import update
+from sqlalchemy.engine import CursorResult
+from sqlalchemy.orm import Session
 
 from cognitive_firewall.schemas import EvaluationRequest
 from cognitive_firewall.storage.audit import AuditEvent, SqlAuditStore
@@ -22,13 +25,26 @@ class ApprovalBinding:
     source: str
     destination: str
     agent_id: str
+    provenance_digest: str
 
     @classmethod
     def from_request(cls, request: EvaluationRequest, policy_hash: str) -> "ApprovalBinding":
         raw = json.dumps(request.payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        return cls(request.case_id, request.operation.value, policy_hash,
-                   hashlib.sha256(raw.encode("utf-8")).hexdigest(),
-                   request.source, request.destination, request.agent_id)
+        provenance = json.dumps(
+            request.provenance.model_dump(mode="json") if request.provenance else None,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return cls(
+            request.case_id,
+            request.operation.value,
+            policy_hash,
+            hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+            request.source,
+            request.destination,
+            request.agent_id,
+            hashlib.sha256(provenance.encode("utf-8")).hexdigest(),
+        )
 
     def digest(self) -> str:
         raw = json.dumps(self.__dict__, sort_keys=True, separators=(",", ":"))
@@ -43,11 +59,24 @@ class ApprovalStore:
     def create(self, binding: ApprovalBinding, expires_at: datetime) -> str:
         approval_id = secrets.token_urlsafe(32)
         with self.db.session() as session:
-            session.add(ApprovalRow(id=approval_id, binding_digest=binding.digest(),
-                                    case_id=binding.case_id, status="pending",
-                                    expires_at=expires_at.timestamp()))
+            session.add(
+                ApprovalRow(
+                    id=approval_id,
+                    binding_digest=binding.digest(),
+                    case_id=binding.case_id,
+                    status="pending",
+                    expires_at=expires_at.timestamp(),
+                )
+            )
+            self._audit(
+                session,
+                binding.case_id,
+                binding.operation,
+                binding.policy_hash,
+                "require_approval",
+                "approval_requested",
+            )
             session.commit()
-        self._audit(binding.case_id, binding.operation, binding.policy_hash, "require_approval", "approval_requested")
         return approval_id
 
     def decide(self, approval_id: str, approve: bool, *, now: datetime | None = None) -> bool:
@@ -58,28 +87,66 @@ class ApprovalStore:
                 return False
             row.status = "approved" if approve else "denied"
             case_id = row.case_id
+            self._audit(
+                session,
+                case_id,
+                "approval",
+                "",
+                "allow" if approve else "block",
+                "approval_granted" if approve else "approval_denied",
+            )
             session.commit()
-        self._audit(case_id, "approval", "", "allow" if approve else "block",
-                    "approval_granted" if approve else "approval_denied")
         return True
 
     def consume(self, approval_id: str, binding: ApprovalBinding, now: datetime) -> bool:
         with self.db.session() as session:
-            result = session.execute(update(ApprovalRow).where(
-                ApprovalRow.id == approval_id,
-                ApprovalRow.binding_digest == binding.digest(),
-                ApprovalRow.case_id == binding.case_id,
-                ApprovalRow.status == "approved",
-                ApprovalRow.expires_at > now.timestamp(),
-            ).values(status="consumed", consumed_at=now.timestamp()))
-            session.commit()
+            result = cast(
+                CursorResult,
+                session.execute(
+                    update(ApprovalRow)
+                    .where(
+                        ApprovalRow.id == approval_id,
+                        ApprovalRow.binding_digest == binding.digest(),
+                        ApprovalRow.case_id == binding.case_id,
+                        ApprovalRow.status == "approved",
+                        ApprovalRow.expires_at > now.timestamp(),
+                    )
+                    .values(status="consumed", consumed_at=now.timestamp())
+                ),
+            )
             consumed = result.rowcount == 1
-        if consumed:
-            self._audit(binding.case_id, binding.operation, binding.policy_hash, "allow", "approval_consumed")
+            if consumed:
+                self._audit(
+                    session,
+                    binding.case_id,
+                    binding.operation,
+                    binding.policy_hash,
+                    "allow",
+                    "approval_consumed",
+                )
+            session.commit()
         return consumed
 
-    def _audit(self, case_id: str, operation: str, policy_hash: str, decision: str, reason: str) -> None:
+    def _audit(
+        self,
+        session: Session,
+        case_id: str,
+        operation: str,
+        policy_hash: str,
+        decision: str,
+        reason: str,
+    ) -> None:
         if self.audit:
-            self.audit.record(AuditEvent(agent_id="operator", case_id=case_id, operation=operation,
-                                         decision=decision, reason_codes=[reason], injection_score=0,
-                                         privacy_score=0, policy_hash=policy_hash))
+            self.audit.record_in_session(
+                session,
+                AuditEvent(
+                    agent_id="operator",
+                    case_id=case_id,
+                    operation=operation,
+                    decision=decision,
+                    reason_codes=[reason],
+                    injection_score=0,
+                    privacy_score=0,
+                    policy_hash=policy_hash,
+                ),
+            )

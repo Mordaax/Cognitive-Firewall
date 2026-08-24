@@ -1,11 +1,22 @@
 import pytest
 from pydantic import ValidationError
 
-from cognitive_firewall.schemas import DecisionAction, EvaluationRequest, EvaluationResponse, Operation
+from cognitive_firewall.schemas import (
+    DecisionAction,
+    EvaluationRequest,
+    EvaluationResponse,
+    Operation,
+)
 
 
 def test_request_rejects_missing_case_id_and_oversized_payload():
-    base = dict(operation=Operation.MODEL_INPUT, payload="safe", source="user", destination="openai", agent_id="agent-1")
+    base = dict(
+        operation=Operation.MODEL_INPUT,
+        payload="safe",
+        source="user",
+        destination="openai",
+        agent_id="agent-1",
+    )
     with pytest.raises(ValidationError):
         EvaluationRequest(**base)
     with pytest.raises(ValidationError):

@@ -23,15 +23,26 @@ def _replacement(category: str, action: str, value: str, case_id: str, store: Ma
     raise TransformationError("unsupported transformation")
 
 
-def _transform_text(text: str, findings: list[Finding], outcome: PolicyOutcome, case_id: str,
-                    mapping_store: MappingStore) -> str:
+def _transform_text(
+    text: str,
+    findings: list[Finding],
+    outcome: PolicyOutcome,
+    case_id: str,
+    mapping_store: MappingStore,
+) -> str:
     if not findings:
         return text
     spans: list[tuple[int, int, Finding]] = []
     for finding in findings:
         if finding.category == "secret":
             raise TransformationError("secret content cannot be transformed")
-        if finding.start is None or finding.end is None or finding.start < 0 or finding.end > len(text) or finding.start >= finding.end:
+        if (
+            finding.start is None
+            or finding.end is None
+            or finding.start < 0
+            or finding.end > len(text)
+            or finding.start >= finding.end
+        ):
             raise TransformationError("finding has no safe span")
         if finding.category not in outcome.transformations:
             raise TransformationError("finding has no required transformation")
@@ -51,12 +62,21 @@ def _transform_text(text: str, findings: list[Finding], outcome: PolicyOutcome, 
         else:
             category = cluster[0].category
             action = outcome.transformations[category]
-        output = output[:start] + _replacement(category, action, text[start:end], case_id, mapping_store) + output[end:]
+        output = (
+            output[:start]
+            + _replacement(category, action, text[start:end], case_id, mapping_store)
+            + output[end:]
+        )
     return output
 
 
-def transform_payload(payload: str | dict[str, Any], findings: list[Finding], outcome: PolicyOutcome,
-                      case_id: str, mapping_store: MappingStore) -> str | dict[str, Any]:
+def transform_payload(
+    payload: str | dict[str, Any],
+    findings: list[Finding],
+    outcome: PolicyOutcome,
+    case_id: str,
+    mapping_store: MappingStore,
+) -> str | dict[str, Any]:
     grouped: dict[str | None, list[Finding]] = {}
     for finding in findings:
         grouped.setdefault(finding.json_path, []).append(finding)
@@ -65,9 +85,14 @@ def transform_payload(payload: str | dict[str, Any], findings: list[Finding], ou
         if isinstance(value, str):
             return _transform_text(value, grouped.get(path, []), outcome, case_id, mapping_store)
         if isinstance(value, dict):
-            return {key: visit(child, f"{path}.{key}" if path else f"$.{key}") for key, child in value.items()}
+            return {
+                key: visit(child, f"{path}.{key}" if path else f"$.{key}")
+                for key, child in value.items()
+            }
         if isinstance(value, list):
-            return [visit(child, f"{path}[{i}]" if path else f"$[{i}]") for i, child in enumerate(value)]
+            return [
+                visit(child, f"{path}[{i}]" if path else f"$[{i}]") for i, child in enumerate(value)
+            ]
         return value
 
     return visit(payload, "$" if isinstance(payload, dict) else None)

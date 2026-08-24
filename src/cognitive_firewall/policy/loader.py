@@ -5,8 +5,8 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from pydantic import ValidationError
 import yaml
+from pydantic import ValidationError
 
 from cognitive_firewall.policy.models import PolicyBundle
 

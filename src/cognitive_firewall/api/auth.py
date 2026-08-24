@@ -1,7 +1,7 @@
 """Constant-time bearer authentication with distinct agent and operator roles."""
 
-from dataclasses import dataclass
 import hmac
+from dataclasses import dataclass
 from typing import Literal
 
 from cognitive_firewall.config import Settings
@@ -14,7 +14,11 @@ class Principal:
 
 class Authenticator:
     def __init__(self, settings: Settings):
-        if not settings.agent_token or not settings.operator_token or settings.agent_token == settings.operator_token:
+        if (
+            not settings.agent_token
+            or not settings.operator_token
+            or settings.agent_token == settings.operator_token
+        ):
             raise ValueError("distinct credentials are required")
         self._agent = settings.agent_token
         self._operator = settings.operator_token

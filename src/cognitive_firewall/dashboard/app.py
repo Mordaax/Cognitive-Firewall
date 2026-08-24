@@ -9,9 +9,19 @@ def sanitize_dashboard_data(raw: dict) -> dict:
     """Defense in depth: pass only aggregate fields into Streamlit widgets."""
     allowed = ("total", "blocked", "sanitized", "allowed", "approvals", "policy_versions")
     result = {key: raw.get(key) for key in allowed}
-    agent_fields = ("agent_id", "total", "blocked", "sanitized", "allowed", "approvals",
-                    "mean_injection_score", "mean_privacy_score")
-    result["agents"] = [{key: agent.get(key) for key in agent_fields} for agent in raw.get("agents", [])]
+    agent_fields = (
+        "agent_id",
+        "total",
+        "blocked",
+        "sanitized",
+        "allowed",
+        "approvals",
+        "mean_injection_score",
+        "mean_privacy_score",
+    )
+    result["agents"] = [
+        {key: agent.get(key) for key in agent_fields} for agent in raw.get("agents", [])
+    ]
     return result
 
 
@@ -26,8 +36,11 @@ def main() -> None:
         st.error("Operator credential is not configured")
         st.stop()
     try:
-        response = httpx.get(f"{base_url.rstrip('/')}/v1/reports/summary",
-                             headers={"Authorization": f"Bearer {token}"}, timeout=5)
+        response = httpx.get(
+            f"{base_url.rstrip('/')}/v1/reports/summary",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=5,
+        )
         response.raise_for_status()
         data = sanitize_dashboard_data(response.json())
     except (httpx.HTTPError, ValueError):

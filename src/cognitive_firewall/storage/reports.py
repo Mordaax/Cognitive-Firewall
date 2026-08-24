@@ -1,8 +1,8 @@
 """Aggregated telemetry and allowlisted audit export."""
 
-from dataclasses import asdict, dataclass
 import json
 import time
+from dataclasses import asdict, dataclass
 
 from sqlalchemy import select
 
@@ -23,8 +23,9 @@ class AgentSummary:
 
 
 class ReportStore:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, cache=None):
         self.db = db
+        self.cache = cache
 
     def _rows(self, agent_id: str | None = None, since: float | None = None) -> list[AuditRow]:
         statement = select(AuditRow)
@@ -38,31 +39,59 @@ class ReportStore:
     def agent_summary(self, agent_id: str, window: int = 86_400) -> AgentSummary:
         rows = self._rows(agent_id, time.time() - window)
         count = len(rows)
-        return AgentSummary(agent_id=agent_id, total=count,
-                            blocked=sum(row.decision == "block" for row in rows),
-                            sanitized=sum(row.decision == "sanitize" for row in rows),
-                            allowed=sum(row.decision == "allow" for row in rows),
-                            approvals=sum(row.decision == "require_approval" for row in rows),
-                            mean_injection_score=round(sum(row.injection_score for row in rows) / count, 2) if count else 0,
-                            mean_privacy_score=round(sum(row.privacy_score for row in rows) / count, 2) if count else 0,
-                            policy_versions=sorted({row.policy_hash for row in rows if row.policy_hash}))
+        return AgentSummary(
+            agent_id=agent_id,
+            total=count,
+            blocked=sum(row.decision == "block" for row in rows),
+            sanitized=sum(row.decision == "sanitize" for row in rows),
+            allowed=sum(row.decision == "allow" for row in rows),
+            approvals=sum(row.decision == "require_approval" for row in rows),
+            mean_injection_score=round(sum(row.injection_score for row in rows) / count, 2)
+            if count
+            else 0,
+            mean_privacy_score=round(sum(row.privacy_score for row in rows) / count, 2)
+            if count
+            else 0,
+            policy_versions=sorted({row.policy_hash for row in rows if row.policy_hash}),
+        )
 
     def summary(self, window: int = 86_400) -> dict:
+        key = f"summary:{window}"
+        if self.cache:
+            cached = self.cache.get(key)
+            if cached is not None:
+                return cached
         rows = self._rows(since=time.time() - window)
         agents = sorted({row.agent_id for row in rows})
         count = len(rows)
-        return {"total": count, "blocked": sum(row.decision == "block" for row in rows),
-                "sanitized": sum(row.decision == "sanitize" for row in rows),
-                "allowed": sum(row.decision == "allow" for row in rows),
-                "approvals": sum(row.decision == "require_approval" for row in rows),
-                "policy_versions": sorted({row.policy_hash for row in rows if row.policy_hash}),
-                "agents": [asdict(self.agent_summary(agent_id, window)) for agent_id in agents]}
+        summary = {
+            "total": count,
+            "blocked": sum(row.decision == "block" for row in rows),
+            "sanitized": sum(row.decision == "sanitize" for row in rows),
+            "allowed": sum(row.decision == "allow" for row in rows),
+            "approvals": sum(row.decision == "require_approval" for row in rows),
+            "policy_versions": sorted({row.policy_hash for row in rows if row.policy_hash}),
+            "agents": [asdict(self.agent_summary(agent_id, window)) for agent_id in agents],
+        }
+        if self.cache:
+            self.cache.set(key, summary)
+        return summary
 
     def export_redacted(self, *, agent_id: str | None = None, window: int = 86_400) -> bytes:
         rows = self._rows(agent_id, time.time() - window)
-        events = [{"id": row.id, "created_at": row.created_at, "agent_id": row.agent_id,
-                   "operation": row.operation, "decision": row.decision,
-                   "reason_codes": row.reason_codes, "categories": row.categories,
-                   "injection_score": row.injection_score, "privacy_score": row.privacy_score,
-                   "policy_hash": row.policy_hash} for row in rows]
+        events = [
+            {
+                "id": row.id,
+                "created_at": row.created_at,
+                "agent_id": row.agent_id,
+                "operation": row.operation,
+                "decision": row.decision,
+                "reason_codes": row.reason_codes,
+                "categories": row.categories,
+                "injection_score": row.injection_score,
+                "privacy_score": row.privacy_score,
+                "policy_hash": row.policy_hash,
+            }
+            for row in rows
+        ]
         return json.dumps({"events": events, "total": len(events)}, separators=(",", ":")).encode()

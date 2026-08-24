@@ -10,20 +10,29 @@ def _matches(rule: PolicyRule, request: EvaluationRequest, findings: list[Findin
     criteria = rule.when
     if criteria.operations and request.operation not in criteria.operations:
         return False
-    if criteria.destination_prefix and not request.destination.startswith(criteria.destination_prefix):
+    if criteria.destination_prefix and not request.destination.startswith(
+        criteria.destination_prefix
+    ):
         return False
     trust = request.provenance.trust_level if request.provenance else "untrusted"
     if criteria.trust_levels and trust not in criteria.trust_levels:
         return False
     if criteria.categories:
-        return any(f.category in criteria.categories and f.severity >= criteria.min_severity for f in findings)
+        return any(
+            f.category in criteria.categories and f.severity >= criteria.min_severity
+            for f in findings
+        )
     if criteria.min_severity:
         return any(f.severity >= criteria.min_severity for f in findings)
     return True
 
 
-def evaluate_policy(request: EvaluationRequest, findings: list[Finding], policy: PolicyBundle,
-                    approved: bool = False) -> PolicyOutcome:
+def evaluate_policy(
+    request: EvaluationRequest,
+    findings: list[Finding],
+    policy: PolicyBundle,
+    approved: bool = False,
+) -> PolicyOutcome:
     transformations: dict[str, str] = {}
     reasons: list[str] = []
     ttl_seconds: int | None = None
@@ -32,14 +41,21 @@ def evaluate_policy(request: EvaluationRequest, findings: list[Finding], policy:
             if approved and rule.action == DecisionAction.REQUIRE_APPROVAL:
                 continue
             if rule.action in {DecisionAction.BLOCK, DecisionAction.REQUIRE_APPROVAL}:
-                return PolicyOutcome(action=rule.action, transformations=transformations,
-                                     reason_codes=reasons + [rule.id], ttl_seconds=ttl_seconds)
+                return PolicyOutcome(
+                    action=rule.action,
+                    transformations=transformations,
+                    reason_codes=reasons + [rule.id],
+                    ttl_seconds=ttl_seconds,
+                )
             if rule.action == DecisionAction.SANITIZE:
                 transformations.update(rule.transformations)
                 reasons.append(rule.id)
                 ttl_seconds = ttl_seconds or rule.ttl_seconds
             elif rule.action == DecisionAction.ALLOW:
-                return PolicyOutcome(action=DecisionAction.SANITIZE if transformations else DecisionAction.ALLOW,
-                                     transformations=transformations, reason_codes=reasons or [rule.id],
-                                     ttl_seconds=ttl_seconds)
+                return PolicyOutcome(
+                    action=DecisionAction.SANITIZE if transformations else DecisionAction.ALLOW,
+                    transformations=transformations,
+                    reason_codes=reasons or [rule.id],
+                    ttl_seconds=ttl_seconds,
+                )
     return PolicyOutcome(action=DecisionAction.BLOCK, reason_codes=["policy_no_match"])

@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-import json
 
 from sqlalchemy import text
 
@@ -18,7 +17,19 @@ def database():
 def test_audit_rows_contain_no_raw_sensitive_value():
     db = database()
     store = SqlAuditStore(db)
-    audit_id = store.record(AuditEvent(agent_id="a1", case_id="c1", operation="model_input", decision="sanitize", reason_codes=["internal_privacy"], injection_score=0, privacy_score=65, policy_hash="abc", categories=["email"]))
+    audit_id = store.record(
+        AuditEvent(
+            agent_id="a1",
+            case_id="c1",
+            operation="model_input",
+            decision="sanitize",
+            reason_codes=["internal_privacy"],
+            injection_score=0,
+            privacy_score=65,
+            policy_hash="abc",
+            categories=["email"],
+        )
+    )
     assert audit_id
     with db.session() as session:
         data = session.execute(text("select * from audit_events")).all()
@@ -41,6 +52,14 @@ def test_memory_ttl_is_checked_on_read_before_cleanup():
     db = database()
     store = SqlMemoryStore(db)
     now = datetime.now(timezone.utc)
-    store.write(MemoryRecord(id="m1", case_id="c1", content={"email": "EMAIL_01"}, expires_at=now + timedelta(seconds=3), provenance={"source_id": "tool-1"}))
+    store.write(
+        MemoryRecord(
+            id="m1",
+            case_id="c1",
+            content={"email": "EMAIL_01"},
+            expires_at=now + timedelta(seconds=3),
+            provenance={"source_id": "tool-1"},
+        )
+    )
     assert store.read("m1", now=now) is not None
     assert store.read("m1", now=now + timedelta(seconds=4)) is None

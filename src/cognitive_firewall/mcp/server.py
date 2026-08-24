@@ -1,7 +1,5 @@
 """MCP stdio server bound to the local evaluation engine."""
 
-import os
-
 from mcp.server import MCPServer
 
 from cognitive_firewall.api.app import create_app

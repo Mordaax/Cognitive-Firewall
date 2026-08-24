@@ -24,8 +24,15 @@ class SqlMemoryStore:
 
     def write(self, record: MemoryRecord) -> None:
         with self.db.session() as session:
-            session.merge(MemoryRow(id=record.id, case_id=record.case_id, content=record.content,
-                                    expires_at=record.expires_at.timestamp(), provenance=record.provenance))
+            session.merge(
+                MemoryRow(
+                    id=record.id,
+                    case_id=record.case_id,
+                    content=record.content,
+                    expires_at=record.expires_at.timestamp(),
+                    provenance=record.provenance,
+                )
+            )
             session.commit()
 
     def read(self, record_id: str, *, now: datetime | None = None) -> MemoryRecord | None:
@@ -34,5 +41,10 @@ class SqlMemoryStore:
             row = session.get(MemoryRow, record_id)
             if row is None or row.expires_at <= check_at.timestamp():
                 return None
-            return MemoryRecord(id=row.id, case_id=row.case_id, content=row.content,
-                                expires_at=datetime.fromtimestamp(row.expires_at, timezone.utc), provenance=row.provenance)
+            return MemoryRecord(
+                id=row.id,
+                case_id=row.case_id,
+                content=row.content,
+                expires_at=datetime.fromtimestamp(row.expires_at, timezone.utc),
+                provenance=row.provenance,
+            )

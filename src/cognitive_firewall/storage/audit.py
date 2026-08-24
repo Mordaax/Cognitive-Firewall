@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import uuid
+from dataclasses import dataclass, field
+
+from sqlalchemy.orm import Session
 
 from cognitive_firewall.storage.db import AuditRow, Database
 
@@ -26,8 +28,12 @@ class SqlAuditStore:
         self.db = db
 
     def record(self, event: AuditEvent) -> str:
-        audit_id = uuid.uuid4().hex
         with self.db.session() as session:
-            session.add(AuditRow(id=audit_id, **event.__dict__))
+            audit_id = self.record_in_session(session, event)
             session.commit()
+        return audit_id
+
+    def record_in_session(self, session: Session, event: AuditEvent) -> str:
+        audit_id = uuid.uuid4().hex
+        session.add(AuditRow(id=audit_id, **event.__dict__))
         return audit_id

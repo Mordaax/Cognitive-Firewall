@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
 import json
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
-
 
 MAX_PAYLOAD_BYTES = 65_536
 
@@ -78,4 +77,3 @@ class EvaluationResponse(BaseModel):
     audit_id: str
     memory_id: str | None = None
     approval_id: str | None = None
-

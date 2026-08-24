@@ -13,13 +13,30 @@ from examples.langgraph_agent import run_demo
 def test_langgraph_workflow_checks_all_boundaries_and_keeps_model_egress_safe():
     db = Database("sqlite:///:memory:")
     db.create_all()
-    engine = Evaluator(load_policy(Path("policies/default.yaml")), SqlAuditStore(db),
-                       SqlMappingStore(db, encryption_key=b"e" * 32, hmac_key=b"h" * 32), SqlMemoryStore(db))
+    engine = Evaluator(
+        load_policy(Path("policies/default.yaml")),
+        SqlAuditStore(db),
+        SqlMappingStore(db, encryption_key=b"e" * 32, hmac_key=b"h" * 32),
+        SqlMemoryStore(db),
+    )
     fixture = json.loads(Path("examples/data/synthetic_incident.json").read_text())
     captured = []
-    result = run_demo(fixture, evaluator=engine, provider="mock", model_transport=lambda value: captured.append(value) or "Resolved.")
-    assert result["steps"] == ["retrieval", "model_input", "tool_request", "tool_result",
-                               "memory_write", "memory_read", "model_output", "export"]
+    result = run_demo(
+        fixture,
+        evaluator=engine,
+        provider="mock",
+        model_transport=lambda value: captured.append(value) or "Resolved.",
+    )
+    assert result["steps"] == [
+        "retrieval",
+        "model_input",
+        "tool_request",
+        "tool_result",
+        "memory_write",
+        "memory_read",
+        "model_output",
+        "export",
+    ]
     assert result["decisions"]["retrieval"] == "block"
     assert result["decisions"]["tool_result"] == "block"
     assert result["memory_id"]

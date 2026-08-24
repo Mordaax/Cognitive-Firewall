@@ -1,14 +1,22 @@
 from cognitive_firewall.detectors.pii import detect_pii
+from cognitive_firewall.detectors.secrets import detect_secrets
 
 
 def test_email_before_sentence_period_is_detected():
     findings = detect_pii("Contact alice@example.com.")
     assert any(item.category == "email" for item in findings)
-from cognitive_firewall.detectors.secrets import detect_secrets
 
 
 def test_detects_supported_pii_in_text_and_nested_json():
-    payload = {"case": {"email": "alice@example.com", "phone": "+1 415 555 0182", "ip": "192.0.2.8", "customer_id": "CUS-12345", "username": "alice_7"}}
+    payload = {
+        "case": {
+            "email": "alice@example.com",
+            "phone": "+1 415 555 0182",
+            "ip": "192.0.2.8",
+            "customer_id": "CUS-12345",
+            "username": "alice_7",
+        }
+    }
     findings = detect_pii(payload)
     categories = {f.category for f in findings}
     assert {"email", "phone", "ip", "customer_id", "username"} <= categories

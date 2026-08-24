@@ -2,11 +2,23 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from collections.abc import Iterator
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import Any
 
-from sqlalchemy import JSON, Float, Integer, LargeBinary, String, Text, UniqueConstraint, create_engine
+from sqlalchemy import (
+    JSON,
+    Float,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+    create_engine,
+    inspect,
+    text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -41,14 +53,17 @@ class MappingRow(Base):
     ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
     created_at: Mapped[float] = mapped_column(Float, default=time.time)
     expires_at: Mapped[float | None] = mapped_column(Float, nullable=True)
-    __table_args__ = (UniqueConstraint("case_id", "category", "digest"), UniqueConstraint("case_id", "token"))
+    __table_args__ = (
+        UniqueConstraint("case_id", "category", "digest"),
+        UniqueConstraint("case_id", "token"),
+    )
 
 
 class MemoryRow(Base):
     __tablename__ = "memory_records"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     case_id: Mapped[str] = mapped_column(String(128), index=True)
-    content: Mapped[object] = mapped_column(JSON)
+    content: Mapped[str | dict[str, Any]] = mapped_column(JSON)
     provenance: Mapped[dict] = mapped_column(JSON)
     expires_at: Mapped[float] = mapped_column(Float, index=True)
 
@@ -69,11 +84,12 @@ class PolicyRow(Base):
     version: Mapped[int] = mapped_column(Integer)
     activated_at: Mapped[float] = mapped_column(Float, default=time.time)
     active: Mapped[bool] = mapped_column(default=False)
+    policy_yaml: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Database:
     def __init__(self, url: str):
-        kwargs = {"future": True}
+        kwargs: dict[str, Any] = {"future": True}
         if url == "sqlite:///:memory:":
             kwargs["connect_args"] = {"check_same_thread": False}
             kwargs["poolclass"] = StaticPool
@@ -84,6 +100,12 @@ class Database:
 
     def create_all(self) -> None:
         Base.metadata.create_all(self.engine)
+        # Upgrade databases created by the first pilot schema.
+        if "policy_yaml" not in {
+            column["name"] for column in inspect(self.engine).get_columns("policy_versions")
+        }:
+            with self.engine.begin() as connection:
+                connection.execute(text("ALTER TABLE policy_versions ADD COLUMN policy_yaml TEXT"))
 
     @contextmanager
     def session(self) -> Iterator[Session]:

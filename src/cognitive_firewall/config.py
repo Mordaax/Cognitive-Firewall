@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -14,9 +14,16 @@ class Settings:
     hmac_key: str
     database_url: str = "sqlite:///./firewall.sqlite3"
     policy_path: str = "policies/default.yaml"
+    redis_url: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
+        try:
+            from dotenv import load_dotenv
+
+            load_dotenv(override=False)
+        except ImportError:
+            pass
         names = (
             "FIREWALL_AGENT_TOKEN",
             "FIREWALL_OPERATOR_TOKEN",
@@ -36,4 +43,5 @@ class Settings:
             hmac_key=values[names[3]],
             database_url=os.environ.get("FIREWALL_DATABASE_URL", "sqlite:///./firewall.sqlite3"),
             policy_path=os.environ.get("FIREWALL_POLICY_PATH", "policies/default.yaml"),
+            redis_url=os.environ.get("FIREWALL_REDIS_URL") or None,
         )

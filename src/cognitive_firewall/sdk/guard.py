@@ -5,7 +5,6 @@ from __future__ import annotations
 from cognitive_firewall.schemas import DecisionAction, EvaluationRequest, Operation
 from cognitive_firewall.sdk.client import FirewallUnavailable
 
-
 _CAPABILITY = object()
 
 
@@ -15,8 +14,13 @@ class EgressDenied(RuntimeError):
 
 class ApprovedPayload:
     __slots__ = ("content", "audit_id", "policy_hash")
+    content: str | dict
+    audit_id: str
+    policy_hash: str
 
-    def __init__(self, content: str | dict, audit_id: str, policy_hash: str = "", *, _key: object = None):
+    def __init__(
+        self, content: str | dict, audit_id: str, policy_hash: str = "", *, _key: object = None
+    ):
         if _key is not _CAPABILITY or not audit_id or content is None:
             raise TypeError("approved payloads are issued only after an allow or sanitize decision")
         object.__setattr__(self, "content", content)
@@ -27,7 +31,9 @@ class ApprovedPayload:
         raise AttributeError("approved payloads are immutable")
 
     @classmethod
-    def _from_decision(cls, content: str | dict, audit_id: str, policy_hash: str) -> "ApprovedPayload":
+    def _from_decision(
+        cls, content: str | dict, audit_id: str, policy_hash: str
+    ) -> "ApprovedPayload":
         return cls(content, audit_id, policy_hash, _key=_CAPABILITY)
 
 
@@ -40,9 +46,14 @@ class AgentGuard:
             result = self.client.evaluate(request.model_copy(update={"operation": operation}))
         except FirewallUnavailable as exc:
             raise EgressDenied("firewall unavailable") from exc
-        if result.decision not in {DecisionAction.ALLOW, DecisionAction.SANITIZE} or result.safe_payload is None:
+        if (
+            result.decision not in {DecisionAction.ALLOW, DecisionAction.SANITIZE}
+            or result.safe_payload is None
+        ):
             raise EgressDenied("firewall denied operation")
-        return ApprovedPayload._from_decision(result.safe_payload, result.audit_id, result.policy_hash)
+        return ApprovedPayload._from_decision(
+            result.safe_payload, result.audit_id, result.policy_hash
+        )
 
     def before_model(self, request: EvaluationRequest) -> ApprovedPayload:
         return self._at(request, Operation.MODEL_INPUT)
