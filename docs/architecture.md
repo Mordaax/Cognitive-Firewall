@@ -23,7 +23,7 @@ High-severity prompt injection and secret findings block. Lower-risk instruction
 The MCP server runs over stdio on the local machine. The CLI and Python SDK restrict ordinary HTTP calls to loopback. The dashboard calls operator-authenticated report endpoints; it does not read the database or mapping values directly. Provider adapters accept immutable `ApprovedPayload` objects from the guard.
 # Enforced boundaries extension
 
-The evaluator now combines independent content screening and action authorization.
+The evaluator combines independent content screening and action authorization.
 HTTP/MCP callers have a bound agent identity. A separate host-owned tool registry
 validates schemas, grants and targets before any approved tool payload is issued.
 The execution broker binds a task's agent and case, re-evaluates the exact action,

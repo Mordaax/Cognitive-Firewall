@@ -26,7 +26,7 @@ Run `.\.venv\Scripts\python.exe -m pytest -q`, Ruff, and the synthetic LangGraph
 # Operating the stricter boundaries
 
 New installs need the core `jsonschema` dependency. Run `pip install -e ".[dev,full]"`
-after upgrading. Optional semantic inference additionally needs `.[semantic]` and
+after upgrading. Optional semantic inference also needs `.[semantic]` and
 a reviewed local model; see [provisioning](semantic-screening.md). Startup never
 downloads weights. Set `FIREWALL_SEMANTIC_MODEL_PATH` to an absolute model directory,
 `FIREWALL_SEMANTIC_LABELS=INJECTION` for the documented model, and a probability

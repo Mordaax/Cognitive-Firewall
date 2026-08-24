@@ -36,7 +36,7 @@ Evaluation requests must use the agent identity bound to their bearer token.
 operator token is accepted only for operator routes, not evaluations. A mixed-agent
 batch is rejected as a whole before any evaluation.
 
-Every `tool_request` now requires a JSON object in `payload`, a registered
+Every `tool_request` requires a JSON object in `payload`, a registered
 `destination` in `policies/tools.yaml`, and an explicit grant for the bound agent.
 Example: `{"service":"demo"}` for `privileged:restart`. This evaluates the proposed
 action only; it never restarts anything. An executor must use `ToolBroker` or enforce
@@ -50,7 +50,7 @@ does not clear the agent's persisted exposure state.
 
 `GET /v1/security/status` requires the operator credential and returns the
 tool-policy hash, provenance and semantic-screening states, threshold and mandatory
-memory-review mode. Approval IDs now additionally bind the tool-policy hash and
+memory-review mode. Approval IDs also bind the tool-policy hash and
 provenance fields. Memory writes and untrusted-derived exports/tools require
 approval, even without recognized personal data or injection.
 

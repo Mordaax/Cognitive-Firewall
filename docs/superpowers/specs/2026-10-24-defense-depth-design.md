@@ -26,7 +26,7 @@ broker's process is outside the boundary: use OS/container separation in deploym
 4. Optional local semantic injection classification through a pinned, preinstalled
    Transformers model. Inference has no network downloads, truncation bypass, or
    silent allow on errors. Threshold crossings block; errors fail closed when
-   enabled. Disabled mode is reported/documented honestly. Add bounded Unicode
+   enabled. Disabled mode is reported and documented. Add bounded Unicode
    and encoding inspection without rewriting safe original content incorrectly.
 5. Regression tests for hostile and benign fixtures; updated README, API,
    architecture, operations and security documentation, example policies and

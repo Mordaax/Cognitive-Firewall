@@ -1,6 +1,6 @@
 # Enforced agent boundaries
 
-This extension separates detection from authorization. A message can look harmless
+The firewall separates detection from authorization. A message can look harmless
 and still propose an unauthorized action. A classifier score can block a request;
 it cannot grant a tool, expand a filesystem root, authorize a recipient, or approve
 a memory write.
@@ -120,7 +120,7 @@ See [isolated reader](isolated-reader.md) for a runnable reader-to-broker exampl
 The included reader is a deterministic paragraph extractor, not an LLM that can
 prove facts or remove malicious meaning. Its outputs remain untrusted. It runs
 in a separate process with a minimal environment and strict input/output bounds,
-but requires an OS sandbox for protection from malicious reader code. A real
+but requires an OS sandbox for protection from malicious reader code. The
 planner should receive validated task-specific facts, not arbitrary reader text
 relabeled as trusted instructions.
 

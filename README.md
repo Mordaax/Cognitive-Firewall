@@ -336,7 +336,7 @@ model locally, then set an absolute directory in `FIREWALL_SEMANTIC_MODEL_PATH`.
 Set `FIREWALL_SEMANTIC_LABELS` to its attack labels and restart the API. Missing or
 failed screening blocks when enabled; inputs beyond the model context are rejected
 instead of truncated. No model is downloaded during service startup or inference.
-The local setup created during this session has a pinned classifier provisioned;
+The local setup uses a pinned classifier;
 fresh clones require the separate provisioning step.
 
 See [defense-in-depth design and integration](docs/defense-in-depth.md),

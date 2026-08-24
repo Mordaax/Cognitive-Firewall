@@ -38,7 +38,7 @@ real semantic model accuracy. Real-model evaluation requires separately provisio
 weights and representative held-back hostile and benign corpora. Never accept a
 pipeline object or label mapping from an untrusted request.
 
-Deterministic screening additionally inspects at most three text copies: original
+Deterministic screening also inspects at most three text copies: original
 and up to two bounded normalization passes using NFKC, format-character removal,
 URL decoding and HTML entity decoding. It also examines one base64 decoding layer
 and normalizes the decoded copy. Original payloads are never rewritten. Findings
@@ -75,11 +75,10 @@ HF_HUB_DISABLE_TELEMETRY=1
 ```
 
 Restart the API and check operator-authenticated `GET /v1/security/status` for
-`"semantic_screening":"enabled"`. In this workspace these settings have now been
-applied and the restarted API passed the live probes recorded in
+`"semantic_screening":"enabled"`. This workspace uses these settings, and the restarted API passed the live probes recorded in
 [verification](verification-2026-10-24.md).
 
-This workspace now has the real model in `.models/prompt-injection`, downloaded at
+This workspace has the model weights in `.models/prompt-injection`, downloaded at
 revision `90c9989b1a342275dd0d1a95aad283c04e075671` from the upstream repository above.
 The seven required files occupy 748,843,219 bytes (about 714 MiB). The safetensors
 SHA-256 is `6521cb8d0ac08148c81464899c424e6148fcc62befa371089fa4061d8b6e0424`.
