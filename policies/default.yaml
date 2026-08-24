@@ -1,0 +1,55 @@
+version: 1
+rules:
+  - id: secret_detected
+    priority: 100
+    when:
+      categories: [secret]
+    action: block
+  - id: high_risk_injection
+    priority: 95
+    when:
+      categories: [injection]
+      min_severity: 80
+      trust_levels: [untrusted]
+    action: block
+  - id: privileged_tool_approval
+    priority: 90
+    when:
+      operations: [tool_request]
+      destination_prefix: "privileged:"
+    action: require_approval
+  - id: external_redaction
+    priority: 80
+    when:
+      operations: [export, model_output]
+      categories: [email, phone, ip, username, customer_id]
+    action: sanitize
+    transformations:
+      email: redact
+      phone: redact
+      ip: redact
+      username: redact
+      customer_id: redact
+  - id: bounded_instruction_strip
+    priority: 70
+    when:
+      categories: [injection]
+    action: sanitize
+    transformations:
+      injection: strip
+  - id: internal_privacy
+    priority: 60
+    when:
+      operations: [model_input, retrieval, tool_request, tool_result, memory_read, memory_write]
+      categories: [email, phone, ip, username, customer_id]
+    action: sanitize
+    transformations:
+      email: pseudonymize
+      username: pseudonymize
+      customer_id: pseudonymize
+      phone: redact
+      ip: redact
+    ttl_seconds: 86400
+  - id: default_allow
+    priority: 1
+    action: allow
