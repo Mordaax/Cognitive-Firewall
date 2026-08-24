@@ -1,8 +1,10 @@
-# CognitiveAI
+# Cognitive Firewall
 
-CognitiveAI is a local firewall for applications that use language models. It checks the content an agent reads, writes, stores, or sends to a provider for personal data, secrets, and instructions hidden in untrusted material.
+Cognitive Firewall is a local firewall for applications that use language models. It checks the content an agent reads, writes, stores, or sends to a provider for personal data, secrets, and instructions hidden in untrusted material.
 
-Agents work with outside material: customer messages, search results, web pages, and tool output. A malicious page can try to redirect the workflow; a customer message can carry private details into a provider request. CognitiveAI checks those boundaries before the application continues. Its policy can allow, sanitize, block, or request operator approval.
+Agents work with outside material: customer messages, search results, web pages, and tool output. A malicious page can try to redirect the workflow; a customer message can carry private details into a provider request. Cognitive Firewall checks those boundaries before the application continues. Its policy can allow, sanitize, block, or request operator approval.
+
+Repository: [Mordaax/Cognitive-Firewall](https://github.com/Mordaax/Cognitive-Firewall).
 
 ## How it works
 
@@ -34,6 +36,20 @@ curl.exe http://127.0.0.1:8000/ready
 `scripts/init_secrets.py` adds missing local credentials to `.env`. To use a cloud model, set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in that file. Raw personal data is processed locally; the included adapters send only content admitted for the selected provider. Keep `.env` private.
 
 For the container setup, run `docker compose up --build -d`. The API listens on `127.0.0.1:8000` and the dashboard on `127.0.0.1:8501`.
+
+## Try the demo
+
+With the service running, send five synthetic examples:
+
+```powershell
+python scripts/demo_requests.py
+```
+
+The examples show ordinary content being allowed, an email being replaced with a pseudonym, malicious retrieval being blocked, an email being redacted for export, and a privileged action waiting for approval. These requests exercise the firewall locally; they do not call a model provider.
+
+Open [API docs](http://127.0.0.1:8000/docs) to inspect and try requests. Use **Authorize** with `FIREWALL_AGENT_TOKEN` from your local `.env` for evaluations. Operator endpoints use the separate `FIREWALL_OPERATOR_TOKEN`.
+
+Open the [dashboard](http://127.0.0.1:8501) and unlock it with `FIREWALL_OPERATOR_TOKEN` from `.env` to see decision counts and risk charts. Refresh the page after sending more examples.
 
 ## Scope
 
