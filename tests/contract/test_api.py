@@ -64,6 +64,16 @@ def test_approval_and_policy_activation():
         pending = app.post("/v1/evaluations", json=privileged, headers=AGENT).json()
         assert pending["decision"] == "require_approval"
         approval_id = pending["approval_id"]
+        assert app.get(f"/v1/approvals/{approval_id}", headers=AGENT).status_code == 403
+        review = app.get(f"/v1/approvals/{approval_id}", headers=OPERATOR)
+        assert review.status_code == 200
+        assert review.json()["operation"] == "tool_request"
+        assert review.json()["destination"] == "privileged:ticket"
+        assert review.json()["agent_id"] == "agent-1"
+        assert "alice@example.com" not in review.text
+        listing = app.get("/v1/approvals/pending", headers=OPERATOR)
+        assert listing.status_code == 200
+        assert any(item["id"] == approval_id for item in listing.json()["items"])
         assert (
             app.post(
                 f"/v1/approvals/{approval_id}/decision", json={"approve": True}, headers=AGENT
@@ -112,11 +122,52 @@ def test_reidentification_requires_operator_and_is_audited():
         token = result["safe_payload"]
         body = {"case_id": "case-1", "token": token}
         assert app.post("/v1/mappings/reidentify", json=body, headers=AGENT).status_code == 403
-        resolved = app.post("/v1/mappings/reidentify", json=body, headers=OPERATOR)
+        assert app.post("/v1/mappings/reidentify", json=body, headers=OPERATOR).status_code != 200
+        pending = app.post("/v1/mappings/reidentify/request", json=body, headers=OPERATOR)
+        assert pending.status_code == 200
+        approval_id = pending.json()["approval_id"]
+        assert (
+            app.post(
+                "/v1/mappings/reidentify",
+                json={**body, "approval_id": approval_id},
+                headers=OPERATOR,
+            ).status_code
+            != 200
+        )
+        assert (
+            app.post(
+                f"/v1/approvals/{approval_id}/decision", json={"approve": True}, headers=OPERATOR
+            ).status_code
+            == 200
+        )
+        resolved = app.post(
+            "/v1/mappings/reidentify", json={**body, "approval_id": approval_id}, headers=OPERATOR
+        )
         assert resolved.status_code == 200 and resolved.json()["value"] == "alice@example.com"
+        assert (
+            app.post(
+                "/v1/mappings/reidentify",
+                json={**body, "approval_id": approval_id},
+                headers=OPERATOR,
+            ).status_code
+            != 200
+        )
         audit = app.get("/v1/audit", headers=OPERATOR).json()
         assert any("mapping_reidentified" in row["reason_codes"] for row in audit["items"])
         assert "alice@example.com" not in str(audit)
+
+
+def test_sensitive_metadata_is_rejected_without_echo():
+    with client() as app:
+        request = payload()
+        request["agent_id"] = "alice@example.com"
+        response = app.post("/v1/evaluations", json=request, headers=AGENT)
+        assert response.status_code == 422
+        assert "alice@example.com" not in response.text
+        request = payload()
+        request["provenance"] = {"source_id": "sk-" + "a" * 32}
+        response = app.post("/v1/evaluations", json=request, headers=AGENT)
+        assert response.status_code == 422
 
 
 def test_activated_policy_survives_restart(tmp_path):
@@ -149,3 +200,25 @@ def test_activated_policy_survives_restart(tmp_path):
             app.post("/v1/evaluations", json=payload("safe"), headers=AGENT).json()["decision"]
             == "block"
         )
+
+
+def test_running_process_uses_new_active_policy(tmp_path):
+    settings = Settings(
+        "agent-secret",
+        "operator-secret",
+        "e" * 32,
+        "h" * 32,
+        database_url=f"sqlite:///{(tmp_path / 'shared.db').as_posix()}",
+        policy_path="policies/default.yaml",
+    )
+    replacement = "version: 2\nrules:\n  - id: deny_all\n    priority: 1\n    action: block\n"
+    with TestClient(create_app(settings)) as first, TestClient(create_app(settings)) as second:
+        prior = second.post("/v1/evaluations", json=payload("ordinary"), headers=AGENT).json()
+        assert prior["decision"] == "allow"
+        activated = first.post(
+            "/v1/policies/activate", json={"yaml": replacement}, headers=OPERATOR
+        )
+        assert activated.status_code == 200
+        current = second.post("/v1/evaluations", json=payload("ordinary"), headers=AGENT).json()
+        assert current["decision"] == "block"
+        assert current["policy_hash"] == activated.json()["active_policy_hash"]

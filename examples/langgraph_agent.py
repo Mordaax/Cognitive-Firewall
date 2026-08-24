@@ -132,7 +132,7 @@ def run_demo(
             guard.before_model,
             fixture["user_input"] + "\n" + state["safe_retrieval"],
             "user",
-            provider,
+            "openai" if provider == "mock" else provider,
         )
         if approved is None:
             return {**meta, "model_output": "[model input blocked]"}

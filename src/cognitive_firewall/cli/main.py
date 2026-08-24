@@ -1,6 +1,7 @@
 """Local-only file scanning and authenticated operator commands."""
 
 import json
+import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -49,6 +50,14 @@ def _api(
         raise typer.Exit(code=1) from exc
 
 
+def _credential(role: str) -> str:
+    name = "FIREWALL_AGENT_TOKEN" if role == "agent" else "FIREWALL_OPERATOR_TOKEN"
+    token = os.environ.get(name, "")
+    if not token:
+        raise typer.BadParameter(f"{name} environment variable required")
+    return token
+
+
 def _evaluate(request: EvaluationRequest, base_url: str, token: str) -> dict:
     return _api(
         "POST",
@@ -79,12 +88,13 @@ def scan(
     agent_id: str = "cli",
     destination: str = "internal",
     base_url: str = "http://127.0.0.1:8000",
-    token: str = typer.Option("", envvar="FIREWALL_AGENT_TOKEN"),
 ) -> None:
     """Evaluate a local file and print a raw-content-free decision summary."""
     _local_url(base_url)
     result = _evaluate(
-        _file_request(path, case_id, agent_id, destination, Operation.RETRIEVAL), base_url, token
+        _file_request(path, case_id, agent_id, destination, Operation.RETRIEVAL),
+        base_url,
+        _credential("agent"),
     )
     typer.echo(
         json.dumps(
@@ -104,7 +114,6 @@ def sanitize(
     agent_id: str = "cli",
     destination: str = "internal",
     base_url: str = "http://127.0.0.1:8000",
-    token: str = typer.Option("", envvar="FIREWALL_AGENT_TOKEN"),
     dry_run: bool = False,
 ) -> None:
     """Write admitted content to a separate path; dry run only reports the decision."""
@@ -112,7 +121,9 @@ def sanitize(
     if source.resolve() == output.resolve():
         raise typer.BadParameter("output path must differ from source")
     result = _evaluate(
-        _file_request(source, case_id, agent_id, destination, Operation.EXPORT), base_url, token
+        _file_request(source, case_id, agent_id, destination, Operation.EXPORT),
+        base_url,
+        _credential("agent"),
     )
     if result.get("decision") not in {"allow", "sanitize"} or result.get("safe_payload") is None:
         raise typer.Exit(code=2)
@@ -141,7 +152,6 @@ def approval_decide(
     approve: bool = typer.Option(False, "--approve"),
     deny: bool = typer.Option(False, "--deny"),
     base_url: str = "http://127.0.0.1:8000",
-    token: str = typer.Option("", envvar="FIREWALL_OPERATOR_TOKEN"),
 ) -> None:
     """Approve or deny one pending request with operator credentials."""
     if approve == deny:
@@ -150,7 +160,7 @@ def approval_decide(
         "POST",
         f"/v1/approvals/{approval_id}/decision",
         base_url=base_url,
-        token=token,
+        token=_credential("operator"),
         json_body={"approve": approve},
     )
     typer.echo(json.dumps(result))
@@ -160,10 +170,9 @@ def approval_decide(
 def report_export(
     output: Path,
     base_url: str = "http://127.0.0.1:8000",
-    token: str = typer.Option("", envvar="FIREWALL_OPERATOR_TOKEN"),
 ) -> None:
     """Export redacted telemetry to a local JSON file."""
-    result = _api("GET", "/v1/reports/export", base_url=base_url, token=token)
+    result = _api("GET", "/v1/reports/export", base_url=base_url, token=_credential("operator"))
     output.write_text(json.dumps(result, indent=2), encoding="utf-8")
     typer.echo(str(output))
 
@@ -172,15 +181,32 @@ def report_export(
 def mapping_reidentify(
     case_id: str,
     token_value: str,
+    approval_id: str,
     base_url: str = "http://127.0.0.1:8000",
-    token: str = typer.Option("", envvar="FIREWALL_OPERATOR_TOKEN"),
 ) -> None:
-    """Resolve a case-scoped mapping with operator credentials."""
+    """Resolve a case-scoped mapping after a single-use operator approval."""
     result = _api(
         "POST",
         "/v1/mappings/reidentify",
         base_url=base_url,
-        token=token,
-        json_body={"case_id": case_id, "token": token_value},
+        token=_credential("operator"),
+        json_body={"case_id": case_id, "token": token_value, "approval_id": approval_id},
     )
     typer.echo(result["value"])
+
+
+@mapping_app.command("request-reidentify")
+def mapping_request_reidentify(
+    case_id: str,
+    token_value: str,
+    base_url: str = "http://127.0.0.1:8000",
+) -> None:
+    """Request a short-lived approval for one case-scoped mapping."""
+    result = _api(
+        "POST",
+        "/v1/mappings/reidentify/request",
+        base_url=base_url,
+        token=_credential("operator"),
+        json_body={"case_id": case_id, "token": token_value},
+    )
+    typer.echo(json.dumps(result))

@@ -3,12 +3,25 @@
 from __future__ import annotations
 
 import json
+import re
 from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
 MAX_PAYLOAD_BYTES = 65_536
+_OPAQUE_ID = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+
+
+def _validate_opaque_id(value: str, *, allow_empty: bool = False) -> str:
+    if allow_empty and not value:
+        return value
+    from cognitive_firewall.detectors.pii import detect_pii
+    from cognitive_firewall.detectors.secrets import detect_secrets
+
+    if not _OPAQUE_ID.fullmatch(value) or detect_pii(value) or detect_secrets(value):
+        raise ValueError("identifier must be opaque and contain no sensitive data")
+    return value
 
 
 class Operation(StrEnum):
@@ -34,6 +47,11 @@ class Provenance(BaseModel):
     trust_level: str = "untrusted"
     fetched_at: str | None = None
 
+    @field_validator("source_id")
+    @classmethod
+    def validate_source_id(cls, value: str) -> str:
+        return _validate_opaque_id(value, allow_empty=True)
+
 
 class Finding(BaseModel):
     category: str
@@ -54,6 +72,11 @@ class EvaluationRequest(BaseModel):
     agent_id: str = Field(min_length=1)
     provenance: Provenance | None = None
     approval_id: str | None = None
+
+    @field_validator("case_id", "agent_id")
+    @classmethod
+    def validate_opaque_id(cls, value: str) -> str:
+        return _validate_opaque_id(value)
 
     @field_validator("payload")
     @classmethod

@@ -6,7 +6,14 @@ from typing import Protocol
 
 
 class MappingStore(Protocol):
-    def get_or_create(self, case_id: str, category: str, normalized_value: str) -> str: ...
+    def get_or_create(
+        self,
+        case_id: str,
+        category: str,
+        normalized_value: str,
+        *,
+        ttl_seconds: int | None = None,
+    ) -> str: ...
 
 
 def normalize_identifier(category: str, value: str) -> str:

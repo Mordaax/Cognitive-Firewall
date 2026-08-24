@@ -76,6 +76,7 @@ class ApprovalRow(Base):
     status: Mapped[str] = mapped_column(String(16), default="pending")
     expires_at: Mapped[float] = mapped_column(Float)
     consumed_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    review_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class PolicyRow(Base):
@@ -106,6 +107,11 @@ class Database:
         }:
             with self.engine.begin() as connection:
                 connection.execute(text("ALTER TABLE policy_versions ADD COLUMN policy_yaml TEXT"))
+        if "review_metadata" not in {
+            column["name"] for column in inspect(self.engine).get_columns("approvals")
+        }:
+            with self.engine.begin() as connection:
+                connection.execute(text("ALTER TABLE approvals ADD COLUMN review_metadata JSON"))
 
     @contextmanager
     def session(self) -> Iterator[Session]:

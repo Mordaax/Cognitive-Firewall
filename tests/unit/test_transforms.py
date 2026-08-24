@@ -13,7 +13,7 @@ class MemoryMappings:
     def __init__(self):
         self.data = {}
 
-    def get_or_create(self, case_id, category, normalized_value):
+    def get_or_create(self, case_id, category, normalized_value, *, ttl_seconds=None):
         key = case_id, category, normalized_value
         if key not in self.data:
             self.data[key] = f"{category.upper()}_{len(self.data) + 1:02}"

@@ -16,9 +16,9 @@ services:
       retries: 6
   dashboard:
     build: .
-    env_file: .env
     environment:
       FIREWALL_API_URL: http://api:8000
+      FIREWALL_OPERATOR_TOKEN: ${FIREWALL_OPERATOR_TOKEN:?set FIREWALL_OPERATOR_TOKEN in .env}
     command: ["streamlit", "run", "src/cognitive_firewall/dashboard/app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]
     depends_on:
       api:

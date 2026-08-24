@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-import json
 import os
 from typing import Any, Callable
 
-from cognitive_firewall.sdk.guard import ApprovedPayload
+from cognitive_firewall.schemas import Operation
+from cognitive_firewall.sdk.guard import ApprovedPayload, EgressDenied
 
 
-def _content(payload: ApprovedPayload) -> str:
+def _content(payload: ApprovedPayload, destination: str) -> str:
     if not isinstance(payload, ApprovedPayload):
         raise TypeError("provider requires ApprovedPayload")
-    return (
-        payload.content
-        if isinstance(payload.content, str)
-        else json.dumps(payload.content, ensure_ascii=False)
-    )
+    if payload.operation != Operation.MODEL_INPUT or payload.destination != destination:
+        raise EgressDenied("provider requires matching model input approval")
+    return payload._wire_content
 
 
 class OpenAIAdapter:
@@ -32,7 +30,7 @@ class OpenAIAdapter:
         self.model = model
 
     def send(self, payload: ApprovedPayload) -> Any:
-        content = _content(payload)
+        content = _content(payload, "openai")
         if self.transport is not None:
             return self.transport(content)
         if self.client is None:
@@ -55,7 +53,7 @@ class ClaudeAdapter:
         self.model = model
 
     def send(self, payload: ApprovedPayload) -> Any:
-        content = _content(payload)
+        content = _content(payload, "claude")
         if self.transport is not None:
             return self.transport(content)
         if self.client is None:

@@ -3,6 +3,7 @@
 import json
 import time
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
@@ -64,6 +65,22 @@ class ReportStore:
         rows = self._rows(since=time.time() - window)
         agents = sorted({row.agent_id for row in rows})
         count = len(rows)
+        buckets: dict[int, list[AuditRow]] = {}
+        for row in rows:
+            buckets.setdefault(int(row.created_at // 3600) * 3600, []).append(row)
+        trend = [
+            {
+                "hour": datetime.fromtimestamp(hour, timezone.utc).strftime("%Y-%m-%d %H:00 UTC"),
+                "blocked": sum(row.decision == "block" for row in bucket),
+                "mean_injection_score": round(
+                    sum(row.injection_score for row in bucket) / len(bucket), 2
+                ),
+                "mean_privacy_score": round(
+                    sum(row.privacy_score for row in bucket) / len(bucket), 2
+                ),
+            }
+            for hour, bucket in sorted(buckets.items())
+        ]
         summary = {
             "total": count,
             "blocked": sum(row.decision == "block" for row in rows),
@@ -72,6 +89,7 @@ class ReportStore:
             "approvals": sum(row.decision == "require_approval" for row in rows),
             "policy_versions": sorted({row.policy_hash for row in rows if row.policy_hash}),
             "agents": [asdict(self.agent_summary(agent_id, window)) for agent_id in agents],
+            "trend": trend,
         }
         if self.cache:
             self.cache.set(key, summary)

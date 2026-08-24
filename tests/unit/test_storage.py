@@ -48,6 +48,38 @@ def test_mapping_is_case_scoped_and_encrypted():
     assert "alice@example.com" not in str(rows)
 
 
+def test_mapping_reidentification_denied_after_expiry():
+    from sqlalchemy import update
+
+    from cognitive_firewall.storage.db import MappingRow
+
+    db = database()
+    store = SqlMappingStore(db, encryption_key=b"e" * 32, hmac_key=b"h" * 32)
+    token = store.get_or_create("case-1", "email", "alice@example.com")
+    with db.session() as session:
+        session.execute(update(MappingRow).values(expires_at=0))
+        session.commit()
+    try:
+        store.reidentify("case-1", token)
+        assert False, "expired mapping was reidentified"
+    except KeyError:
+        pass
+
+
+def test_mapping_retention_uses_shorter_policy_ttl():
+    from sqlalchemy import select
+
+    from cognitive_firewall.storage.db import MappingRow
+
+    db = database()
+    store = SqlMappingStore(db, encryption_key=b"e" * 32, hmac_key=b"h" * 32)
+    token = store.get_or_create("case-1", "email", "alice@example.com", ttl_seconds=60)
+    with db.session() as session:
+        row = session.scalar(select(MappingRow).where(MappingRow.token == token))
+        assert row and row.expires_at is not None
+        assert 0 < row.expires_at - row.created_at <= 61
+
+
 def test_memory_ttl_is_checked_on_read_before_cleanup():
     db = database()
     store = SqlMemoryStore(db)

@@ -4,6 +4,7 @@ from cognitive_firewall.cli.main import app
 
 
 def test_sanitize_dry_run_and_separate_output(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREWALL_AGENT_TOKEN", "token")
     source = tmp_path / "incident.txt"
     target = tmp_path / "safe.txt"
     source.write_text("alice@example.com")
@@ -25,8 +26,6 @@ def test_sanitize_dry_run_and_separate_output(tmp_path, monkeypatch):
             "c1",
             "--agent-id",
             "a1",
-            "--token",
-            "token",
             "--dry-run",
         ],
     )
@@ -42,8 +41,6 @@ def test_sanitize_dry_run_and_separate_output(tmp_path, monkeypatch):
             "c1",
             "--agent-id",
             "a1",
-            "--token",
-            "token",
         ],
     )
     assert result.exit_code == 0
@@ -52,13 +49,20 @@ def test_sanitize_dry_run_and_separate_output(tmp_path, monkeypatch):
     assert len(calls) == 2
 
 
-def test_cli_rejects_same_output_path_and_remote_firewall(tmp_path):
+def test_cli_rejects_same_output_path_and_remote_firewall(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREWALL_AGENT_TOKEN", "token")
     source = tmp_path / "incident.txt"
     source.write_text("alice@example.com")
     runner = CliRunner()
-    result = runner.invoke(app, ["sanitize", str(source), str(source), "--token", "token"])
+    result = runner.invoke(app, ["sanitize", str(source), str(source)])
     assert result.exit_code != 0
-    result = runner.invoke(
-        app, ["scan", str(source), "--token", "token", "--base-url", "https://remote.example"]
-    )
+    result = runner.invoke(app, ["scan", str(source), "--base-url", "https://remote.example"])
+    assert result.exit_code != 0
+
+
+def test_cli_never_accepts_credential_on_command_line(tmp_path, monkeypatch):
+    monkeypatch.setenv("FIREWALL_AGENT_TOKEN", "token")
+    source = tmp_path / "incident.txt"
+    source.write_text("safe")
+    result = CliRunner().invoke(app, ["scan", str(source), "--token", "token"])
     assert result.exit_code != 0

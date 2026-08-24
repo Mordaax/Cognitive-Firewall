@@ -1,16 +1,17 @@
 """Authenticated evaluation and operator management routes."""
 
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select, text
 
 from cognitive_firewall.api.auth import Authenticator, Principal
 from cognitive_firewall.engine import Evaluator
 from cognitive_firewall.policy.loader import load_policy_bytes
-from cognitive_firewall.schemas import EvaluationRequest, EvaluationResponse
-from cognitive_firewall.storage.approvals import ApprovalStore
+from cognitive_firewall.schemas import EvaluationRequest, EvaluationResponse, _validate_opaque_id
+from cognitive_firewall.storage.approvals import ApprovalBinding, ApprovalStore
 from cognitive_firewall.storage.audit import AuditEvent
 from cognitive_firewall.storage.db import AuditRow, Database
 from cognitive_firewall.storage.policies import SqlPolicyStore
@@ -32,6 +33,12 @@ class ApprovalDecision(BaseModel):
 class ReidentifyRequest(BaseModel):
     case_id: str = Field(min_length=1)
     token: str = Field(min_length=1)
+    approval_id: str | None = None
+
+    @field_validator("case_id")
+    @classmethod
+    def validate_case_id(cls, value: str) -> str:
+        return _validate_opaque_id(value)
 
 
 def install_routes(
@@ -69,7 +76,7 @@ def install_routes(
         try:
             with db.session() as session:
                 session.execute(text("SELECT 1"))
-            if evaluator.policy is None or policies.active_hash() != evaluator.policy.policy_hash:
+            if policies.active_bundle() is None:
                 raise RuntimeError("policy unavailable")
         except Exception:
             raise HTTPException(status_code=503, detail="not ready") from None
@@ -91,7 +98,7 @@ def install_routes(
 
     @app.get("/v1/policies")
     def get_policies(_: Annotated[Principal, Depends(operator)]) -> dict:
-        policy = evaluator.policy
+        policy = policies.active_bundle()
         return {
             "active_policy_hash": policies.active_hash(),
             "version": policy.version if policy else None,
@@ -115,6 +122,21 @@ def install_routes(
         if not approvals.decide(approval_id, body.approve):
             raise HTTPException(status_code=404, detail="approval unavailable")
         return {"status": "approved" if body.approve else "denied"}
+
+    @app.get("/v1/approvals/pending")
+    def list_pending_approvals(
+        _: Annotated[Principal, Depends(operator)],
+        limit: int = Query(default=50, ge=1, le=500),
+        offset: int = Query(default=0, ge=0),
+    ) -> dict:
+        return approvals.list_pending(limit=limit, offset=offset)
+
+    @app.get("/v1/approvals/{approval_id}")
+    def get_pending_approval(approval_id: str, _: Annotated[Principal, Depends(operator)]) -> dict:
+        review = approvals.get_pending(approval_id)
+        if review is None:
+            raise HTTPException(status_code=404, detail="approval unavailable")
+        return review
 
     @app.get("/v1/audit")
     def list_audit(
@@ -152,12 +174,35 @@ def install_routes(
             ],
         }
 
+    @app.post("/v1/mappings/reidentify/request")
+    def request_reidentification(
+        body: ReidentifyRequest, _: Annotated[Principal, Depends(operator)]
+    ) -> dict:
+        policy = policies.active_bundle()
+        if policy is None:
+            raise HTTPException(status_code=503, detail="policy unavailable")
+        binding = ApprovalBinding.for_reidentification(body.case_id, body.token, policy.policy_hash)
+        approval_id = approvals.create(binding, datetime.now(timezone.utc) + timedelta(minutes=15))
+        return {"approval_id": approval_id, "status": "pending"}
+
     @app.post("/v1/mappings/reidentify")
     def reidentify(body: ReidentifyRequest, _: Annotated[Principal, Depends(operator)]) -> dict:
-        if evaluator.policy is None:
+        policy = policies.active_bundle()
+        if policy is None:
             raise HTTPException(status_code=503, detail="policy unavailable")
+        if not body.approval_id:
+            raise HTTPException(status_code=403, detail="approval required")
+        binding = ApprovalBinding.for_reidentification(body.case_id, body.token, policy.policy_hash)
+        if not approvals.consume(body.approval_id, binding, datetime.now(timezone.utc)):
+            raise HTTPException(status_code=403, detail="approval invalid")
         try:
-            value = evaluator.mapping_store.reidentify(body.case_id, body.token)
+            retention = min(
+                (rule.ttl_seconds for rule in policy.rules if rule.ttl_seconds),
+                default=86_400,
+            )
+            value = evaluator.mapping_store.reidentify(
+                body.case_id, body.token, retention_seconds=retention
+            )
         except KeyError:
             raise HTTPException(status_code=404, detail="mapping not found") from None
         evaluator.audit_store.record(
@@ -169,7 +214,7 @@ def install_routes(
                 reason_codes=["mapping_reidentified"],
                 injection_score=0,
                 privacy_score=0,
-                policy_hash=evaluator.policy.policy_hash,
+                policy_hash=policy.policy_hash,
             )
         )
         return {"value": value}

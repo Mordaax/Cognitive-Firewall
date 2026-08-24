@@ -13,13 +13,22 @@ class TransformationError(RuntimeError):
     pass
 
 
-def _replacement(category: str, action: str, value: str, case_id: str, store: MappingStore) -> str:
+def _replacement(
+    category: str,
+    action: str,
+    value: str,
+    case_id: str,
+    store: MappingStore,
+    ttl_seconds: int | None,
+) -> str:
     if action == "redact":
         return f"[REDACTED:{category.upper()}]"
     if action == "strip" and category == "injection":
         return "[REMOVED:UNTRUSTED_INSTRUCTION]"
     if action == "pseudonymize":
-        return store.get_or_create(case_id, category, normalize_identifier(category, value))
+        return store.get_or_create(
+            case_id, category, normalize_identifier(category, value), ttl_seconds=ttl_seconds
+        )
     raise TransformationError("unsupported transformation")
 
 
@@ -64,7 +73,9 @@ def _transform_text(
             action = outcome.transformations[category]
         output = (
             output[:start]
-            + _replacement(category, action, text[start:end], case_id, mapping_store)
+            + _replacement(
+                category, action, text[start:end], case_id, mapping_store, outcome.ttl_seconds
+            )
             + output[end:]
         )
     return output

@@ -57,3 +57,54 @@ def test_memory_write_stores_only_sanitized_content():
     stored = service.memory_store.read(response.memory_id)
     assert stored and stored.content == response.safe_payload
     assert "alice@example.com" not in str(stored.content)
+
+
+def test_sensitive_object_keys_are_blocked_before_egress():
+    service = evaluator()
+    for key in ("alice@example.com", "sk-" + "a" * 32):
+        response = service.evaluate(request({key: "ordinary value"}))
+        assert response.decision == DecisionAction.BLOCK
+        assert response.safe_payload is None
+        assert response.audit_id
+
+
+def test_policy_cannot_allow_supported_pii_or_secrets_to_provider():
+    from cognitive_firewall.policy.loader import load_policy_bytes
+
+    service = evaluator()
+    service.policy = load_policy_bytes(
+        b"version: 2\nrules:\n  - id: permissive\n    priority: 1\n    action: allow\n"
+    )
+    pii = service.evaluate(request("Contact alice@example.com"))
+    assert pii.decision == DecisionAction.SANITIZE
+    assert "alice@example.com" not in str(pii.safe_payload)
+    secret = service.evaluate(request("sk-" + "a" * 32))
+    assert secret.decision == DecisionAction.BLOCK and secret.safe_payload is None
+
+
+def test_policy_redaction_remains_stricter_than_privacy_floor():
+    from cognitive_firewall.policy.loader import load_policy_bytes
+
+    service = evaluator()
+    service.policy = load_policy_bytes(
+        b"version: 3\nrules:\n"
+        b"  - id: strict_email\n    priority: 10\n"
+        b"    when:\n      categories: [email]\n"
+        b"    action: sanitize\n    transformations:\n      email: redact\n"
+        b"  - id: allow\n    priority: 1\n    action: allow\n"
+    )
+    response = service.evaluate(request("alice@example.com"))
+    assert response.safe_payload == "[REDACTED:EMAIL]"
+
+
+def test_numeric_sensitive_fields_are_blocked():
+    service = evaluator()
+    for payload in (
+        {"phone": 6505551234},
+        {"phone_number": 6505551234},
+        {"mobile": 6505551234},
+        {"customer_id": 12345},
+    ):
+        response = service.evaluate(request(payload))
+        assert response.decision == DecisionAction.BLOCK
+        assert response.safe_payload is None

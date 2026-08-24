@@ -4,7 +4,7 @@
 
 Install Python 3.12, create `.venv`, and install `.[dev,full]`. Run `python scripts/init_secrets.py`; it appends only missing firewall credentials to the existing `.env`. Use `python -m uvicorn cognitive_firewall.api.app:create_app --factory --host 127.0.0.1 --port 8000` for local startup. `/ready` returns 200 only when the database and active policy are available. The initial schema is created idempotently at startup with SQLAlchemy metadata; back up data before schema changes.
 
-Docker: `docker compose up --build -d`, then `docker compose ps` and `curl http://127.0.0.1:8000/ready`. The dashboard listens at `127.0.0.1:8501`. `docker compose down` stops the containers and retains the named data volume. Do not use `down -v` unless data deletion is intended.
+Docker: `docker compose up --build -d`, then `docker compose ps` and `curl http://127.0.0.1:8000/ready`. The dashboard listens at `127.0.0.1:8501` and prompts each browser session for the operator credential before loading reports. `docker compose down` stops the containers and retains the named data volume. Do not use `down -v` unless data deletion is intended.
 
 ## Optional Postgres and Redis
 
@@ -12,7 +12,9 @@ To use Postgres, set `FIREWALL_POSTGRES_PASSWORD` to a strong secret and `FIREWA
 
 ## Policy and approvals
 
-Validate a file with `cognitive-firewall policy validate policies/default.yaml`. Activate YAML through the operator endpoint and save the previous policy file/hash. Roll back by submitting the previous YAML. Each decision response records the active hash; a policy change invalidates pending approvals because the binding includes that hash. Approvals expire after 15 minutes and cannot be replayed.
+Validate a file with `cognitive-firewall policy validate policies/default.yaml`. Activate YAML through the operator endpoint and save the previous policy file/hash. Roll back by submitting the previous YAML. Each decision response records the active hash; a policy change invalidates pending approvals because the binding includes that hash. Review pending requests through `GET /v1/approvals/pending` or `GET /v1/approvals/{id}` before deciding. Approvals expire after 15 minutes and cannot be replayed.
+
+Re-identification requires two steps before the final lookup: submit the case and pseudonym to `/v1/mappings/reidentify/request`, then decide the returned approval ID via `/v1/approvals/{id}/decision`. Submit the same case and pseudonym with `approval_id` to `/v1/mappings/reidentify`. The approval is single-use; mappings expire after 24 hours by default. The CLI reads bearer tokens from environment variables, not command arguments.
 
 ## Backup, recovery, and keys
 

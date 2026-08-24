@@ -2,15 +2,18 @@
 
 import hashlib
 import json
+import re
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import cast
 
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
+from cognitive_firewall.detectors.pii import detect_pii
+from cognitive_firewall.detectors.secrets import detect_secrets
 from cognitive_firewall.schemas import EvaluationRequest
 from cognitive_firewall.storage.audit import AuditEvent, SqlAuditStore
 from cognitive_firewall.storage.db import ApprovalRow, Database
@@ -26,6 +29,19 @@ class ApprovalBinding:
     destination: str
     agent_id: str
     provenance_digest: str
+
+    @classmethod
+    def for_reidentification(cls, case_id: str, token: str, policy_hash: str) -> "ApprovalBinding":
+        return cls(
+            case_id=case_id,
+            operation="reidentify",
+            policy_hash=policy_hash,
+            payload_digest=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+            source="operator",
+            destination="local",
+            agent_id="operator",
+            provenance_digest="",
+        )
 
     @classmethod
     def from_request(cls, request: EvaluationRequest, policy_hash: str) -> "ApprovalBinding":
@@ -66,6 +82,13 @@ class ApprovalStore:
                     case_id=binding.case_id,
                     status="pending",
                     expires_at=expires_at.timestamp(),
+                    review_metadata={
+                        "operation": binding.operation,
+                        "destination": self._safe_label(binding.destination),
+                        "agent_id": self._safe_label(binding.agent_id),
+                        "payload_digest": binding.payload_digest,
+                        "policy_hash": binding.policy_hash,
+                    },
                 )
             )
             self._audit(
@@ -79,14 +102,75 @@ class ApprovalStore:
             session.commit()
         return approval_id
 
+    @staticmethod
+    def _safe_label(value: str) -> str:
+        if (
+            not re.fullmatch(r"[A-Za-z][A-Za-z0-9_:/.-]{0,127}", value)
+            or detect_pii(value)
+            or detect_secrets(value)
+        ):
+            return "[redacted]"
+        return value
+
+    @staticmethod
+    def _review(row: ApprovalRow) -> dict:
+        return {
+            "id": row.id,
+            "case_id": row.case_id,
+            "status": row.status,
+            "expires_at": row.expires_at,
+            **(row.review_metadata or {}),
+        }
+
+    def get_pending(self, approval_id: str, *, now: datetime | None = None) -> dict | None:
+        now = now or datetime.now(timezone.utc)
+        with self.db.session() as session:
+            row = session.scalar(
+                select(ApprovalRow).where(
+                    ApprovalRow.id == approval_id,
+                    ApprovalRow.status == "pending",
+                    ApprovalRow.expires_at > now.timestamp(),
+                )
+            )
+            return self._review(row) if row else None
+
+    def list_pending(self, *, limit: int = 50, offset: int = 0) -> dict:
+        now = datetime.now(timezone.utc).timestamp()
+        with self.db.session() as session:
+            condition = (ApprovalRow.status == "pending", ApprovalRow.expires_at > now)
+            total = (
+                session.scalar(select(func.count()).select_from(ApprovalRow).where(*condition)) or 0
+            )
+            rows = session.scalars(
+                select(ApprovalRow)
+                .where(*condition)
+                .order_by(ApprovalRow.expires_at, ApprovalRow.id)
+                .offset(offset)
+                .limit(limit)
+            ).all()
+            return {"total": total, "items": [self._review(row) for row in rows]}
+
     def decide(self, approval_id: str, approve: bool, *, now: datetime | None = None) -> bool:
         now = now or datetime.now(timezone.utc)
         with self.db.session() as session:
             row = session.get(ApprovalRow, approval_id)
-            if row is None or row.status != "pending" or row.expires_at <= now.timestamp():
+            if row is None:
                 return False
-            row.status = "approved" if approve else "denied"
             case_id = row.case_id
+            result = cast(
+                CursorResult,
+                session.execute(
+                    update(ApprovalRow)
+                    .where(
+                        ApprovalRow.id == approval_id,
+                        ApprovalRow.status == "pending",
+                        ApprovalRow.expires_at > now.timestamp(),
+                    )
+                    .values(status="approved" if approve else "denied")
+                ),
+            )
+            if result.rowcount != 1:
+                return False
             self._audit(
                 session,
                 case_id,

@@ -53,6 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ),
         SqlMemoryStore(db),
         approvals,
+        policy_store=policies,
     )
     app.state.evaluator = evaluator
     cache = None
